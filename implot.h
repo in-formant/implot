@@ -137,6 +137,9 @@ enum ImPlotAxisFlags_ {
     ImPlotAxisFlags_RangeFit      = 1 << 12, // axis will only fit points if the point is in the visible range of the **orthogonal** axis
     ImPlotAxisFlags_LockMin       = 1 << 13, // the axis minimum value will be locked when panning/zooming
     ImPlotAxisFlags_LockMax       = 1 << 14, // the axis maximum value will be locked when panning/zooming
+    ImPlotAxisFlags_MelScale      = 1 << 15, // a Mel axis scale will be used
+    ImPlotAxisFlags_ErbScale      = 1 << 16, // an ERB axis scale will be used
+    ImPlotAxisFlags_BarkScale     = 1 << 17, // a Bark axis scale will be used
     ImPlotAxisFlags_Lock          = ImPlotAxisFlags_LockMin | ImPlotAxisFlags_LockMax,
     ImPlotAxisFlags_NoDecorations = ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoTickLabels,
     ImPlotAxisFlags_AuxDefault    = ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_Opposite

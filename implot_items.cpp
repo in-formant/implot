@@ -493,6 +493,34 @@ struct TransformerLog {
     double Den, PltMin, PltMax, PixMin, M;
 };
 
+struct TransformerMel {
+    TransformerMel(double pixMin, double pltMin, double,       double m, double    ) : PixMin(pixMin), PltMin(pltMin), M(m) { }
+    template <typename T> IMPLOT_INLINE float operator()(T p) const {
+        p = ImMel(p);
+        return (float)(PixMin + M * (p - PltMin));
+    }
+    double PixMin, PltMin, M;
+};
+
+
+struct TransformerErb {
+    TransformerErb(double pixMin, double pltMin, double,       double m, double    ) : PixMin(pixMin), PltMin(pltMin), M(m) { }
+    template <typename T> IMPLOT_INLINE float operator()(T p) const {
+        p = ImErb(p);
+        return (float)(PixMin + M * (p - PltMin));
+    }
+    double PixMin, PltMin, M;
+};
+
+struct TransformerBark {
+    TransformerBark(double pixMin, double pltMin, double,       double m, double    ) : PixMin(pixMin), PltMin(pltMin), M(m) { }
+    template <typename T> IMPLOT_INLINE float operator()(T p) const {
+        p = ImBark(p);
+        return (float)(PixMin + M * (p - PltMin));
+    }
+    double PixMin, PltMin, M;
+};
+
 template <typename TransformerX, typename TransformerY>
 struct TransformerXY {
     TransformerXY(const ImPlotAxis& x_axis, const ImPlotAxis& y_axis) :
@@ -531,6 +559,9 @@ typedef TransformerXY<TransformerLin,TransformerLin> TransformerLinLin;
 typedef TransformerXY<TransformerLin,TransformerLog> TransformerLinLog;
 typedef TransformerXY<TransformerLog,TransformerLin> TransformerLogLin;
 typedef TransformerXY<TransformerLog,TransformerLog> TransformerLogLog;
+typedef TransformerXY<TransformerLin,TransformerMel> TransformerLinMel;
+typedef TransformerXY<TransformerLin,TransformerErb> TransformerLinErb;
+typedef TransformerXY<TransformerLin,TransformerBark> TransformerLinBark;
 
 //-----------------------------------------------------------------------------
 // PRIMITIVE RENDERERS
@@ -975,6 +1006,9 @@ IMPLOT_INLINE void PlotLineEx(const char* label_id, const Getter& getter) {
                 case ImPlotScale_LogLin: RenderLineStrip(getter, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LinLog: RenderLineStrip(getter, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LogLog: RenderLineStrip(getter, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinMel: RenderLineStrip(getter, TransformerLinMel(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinErb: RenderLineStrip(getter, TransformerLinErb(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinBark: RenderLineStrip(getter, TransformerLinBark(), DrawList, s.LineWeight, col_line); break;
             }
         }
         // render markers
@@ -989,6 +1023,9 @@ IMPLOT_INLINE void PlotLineEx(const char* label_id, const Getter& getter) {
                 case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinMel: RenderMarkers(getter, TransformerLinMel(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinErb: RenderMarkers(getter, TransformerLinErb(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinBark: RenderMarkers(getter, TransformerLinBark(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
             }
         }
         EndItem();
@@ -1064,6 +1101,9 @@ IMPLOT_INLINE void PlotScatterEx(const char* label_id, const Getter& getter) {
                 case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinMel: RenderMarkers(getter, TransformerLinMel(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinErb: RenderMarkers(getter, TransformerLinErb(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinBark: RenderMarkers(getter, TransformerLinBark(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
             }
         }
         EndItem();
@@ -1132,6 +1172,9 @@ IMPLOT_INLINE void PlotStairsEx(const char* label_id, const Getter& getter) {
                 case ImPlotScale_LogLin: RenderStairs(getter, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LinLog: RenderStairs(getter, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LogLog: RenderStairs(getter, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinMel: RenderStairs(getter, TransformerLinMel(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinErb: RenderStairs(getter, TransformerLinErb(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinBark: RenderStairs(getter, TransformerLinBark(), DrawList, s.LineWeight, col_line); break;
             }
         }
         // render markers
@@ -1145,6 +1188,9 @@ IMPLOT_INLINE void PlotStairsEx(const char* label_id, const Getter& getter) {
                 case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinMel: RenderMarkers(getter, TransformerLinMel(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinErb: RenderMarkers(getter, TransformerLinErb(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinBark: RenderMarkers(getter, TransformerLinBark(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
             }
         }
         EndItem();
@@ -1215,6 +1261,9 @@ IMPLOT_INLINE void PlotShadedEx(const char* label_id, const Getter1& getter1, co
                 case ImPlotScale_LogLin: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLogLin>(getter1,getter2,TransformerLogLin(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
                 case ImPlotScale_LinLog: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinLog>(getter1,getter2,TransformerLinLog(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
                 case ImPlotScale_LogLog: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLogLog>(getter1,getter2,TransformerLogLog(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
+                case ImPlotScale_LinMel: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinMel>(getter1,getter2,TransformerLinMel(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
+                case ImPlotScale_LinErb: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinErb>(getter1,getter2,TransformerLinErb(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
+                case ImPlotScale_LinBark: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinBark>(getter1,getter2,TransformerLinBark(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
             }
         }
         EndItem();
@@ -1622,6 +1671,9 @@ IMPLOT_INLINE void PlotStemsEx(const char* label_id, const GetterM& get_mark, co
                 case ImPlotScale_LogLin: RenderLineSegments(get_mark, get_base, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LinLog: RenderLineSegments(get_mark, get_base, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LogLog: RenderLineSegments(get_mark, get_base, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinMel: RenderLineSegments(get_mark, get_base, TransformerLinMel(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinErb: RenderLineSegments(get_mark, get_base, TransformerLinErb(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinBark: RenderLineSegments(get_mark, get_base, TransformerLinBark(), DrawList, s.LineWeight, col_line); break;
             }
         }
         // render markers
@@ -1636,6 +1688,9 @@ IMPLOT_INLINE void PlotStemsEx(const char* label_id, const GetterM& get_mark, co
                 case ImPlotScale_LogLin: RenderMarkers(get_mark, TransformerLogLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LinLog: RenderMarkers(get_mark, TransformerLinLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
                 case ImPlotScale_LogLog: RenderMarkers(get_mark, TransformerLogLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinMel: RenderMarkers(get_mark, TransformerLinMel(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinErb: RenderMarkers(get_mark, TransformerLinErb(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
+                case ImPlotScale_LinBark: RenderMarkers(get_mark, TransformerLinBark(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
             }
         }
         EndItem();
@@ -1702,6 +1757,9 @@ void PlotVLines(const char* label_id, const T* xs, int count, int offset, int st
                 case ImPlotScale_LogLin: RenderLineSegments(get_min, get_max, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LinLog: RenderLineSegments(get_min, get_max, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LogLog: RenderLineSegments(get_min, get_max, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinMel: RenderLineSegments(get_min, get_max, TransformerLinMel(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinErb: RenderLineSegments(get_min, get_max, TransformerLinErb(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinBark: RenderLineSegments(get_min, get_max, TransformerLinBark(), DrawList, s.LineWeight, col_line); break;
             }
         }
         EndItem();
@@ -1740,6 +1798,9 @@ void PlotHLines(const char* label_id, const T* ys, int count, int offset, int st
                 case ImPlotScale_LogLin: RenderLineSegments(get_min, get_max, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LinLog: RenderLineSegments(get_min, get_max, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
                 case ImPlotScale_LogLog: RenderLineSegments(get_min, get_max, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinMel: RenderLineSegments(get_min, get_max, TransformerLinMel(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinErb: RenderLineSegments(get_min, get_max, TransformerLinErb(), DrawList, s.LineWeight, col_line); break;
+                case ImPlotScale_LinBark: RenderLineSegments(get_min, get_max, TransformerLinBark(), DrawList, s.LineWeight, col_line); break;
             }
         }
         EndItem();
@@ -2003,6 +2064,9 @@ void PlotHeatmap(const char* label_id, const T* values, int rows, int cols, doub
             case ImPlotScale_LogLin: RenderHeatmap(TransformerLogLin(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
             case ImPlotScale_LinLog: RenderHeatmap(TransformerLinLog(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
             case ImPlotScale_LogLog: RenderHeatmap(TransformerLogLog(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
+            case ImPlotScale_LinMel: RenderHeatmap(TransformerLinMel(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
+            case ImPlotScale_LinErb: RenderHeatmap(TransformerLinErb(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
+            case ImPlotScale_LinBark: RenderHeatmap(TransformerLinBark(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
         }
         EndItem();
     }
@@ -2177,6 +2241,10 @@ double PlotHistogram2D(const char* label_id, const T* xs, const T* ys, int count
             case ImPlotScale_LogLin: RenderHeatmap(TransformerLogLin(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
             case ImPlotScale_LinLog: RenderHeatmap(TransformerLinLog(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
             case ImPlotScale_LogLog: RenderHeatmap(TransformerLogLog(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
+            case ImPlotScale_LinMel: RenderHeatmap(TransformerLinMel(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
+            case ImPlotScale_LinErb: RenderHeatmap(TransformerLinErb(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
+            case ImPlotScale_LinBark: RenderHeatmap(TransformerLinBark(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
+
         }
         EndItem();
     }
