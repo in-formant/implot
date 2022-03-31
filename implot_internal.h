@@ -216,6 +216,43 @@ static inline ImU32 ImAlphaU32(ImU32 col, float alpha) {
     return col & ~((ImU32)((1.0f-alpha)*255)<<IM_COL32_A_SHIFT);
 }
 
+// Computes the mel frequency for a given Hz frequency.
+template <typename T>
+static inline T ImMel(T f) { return 2595 * ImLog10(1 + f / 700); }
+
+// Computes the ERB frequency for a given Hz frequency.
+template <typename T>
+static inline T ImErb(T f) { return 21.33228 * ImLog10(1 + 0.00437 * f); }
+
+// Computes the Bark frequency for a given Hz frequency.
+template <typename T>
+static inline T ImBark(T f) {
+    double b = (26.81 * f) / (1960 + f) - 0.53;
+    if (b < 2)
+        b = b + 0.15 * (2 - b);
+    if (b > 20.1)
+        b = b + 0.22 * (b - 20.1);
+    return b;
+}
+
+// Computes the Hz frequency for a given mel frequency.
+template <typename T>
+static inline T ImMelInverse(T m) { return 700 * (ImPow(10, m / 2595) - 1); }
+
+// Computes the Hz frequency for a given ERB frequency.
+template <typename T>
+static inline T ImErbInverse(T erb) { return (ImPow(10, erb / 21.33228) - 1) / 0.00437; }
+
+// Computes the Hz frequency for a given Bark frequency.
+template <typename T>
+static inline T ImBarkInverse(T b) {
+    if (b < 2)
+        b = (b - 0.3) / 0.85;
+    if (b > 20.1)
+        b = (b + 4.422) / 1.22;
+    return 1960 * (b + 0.53) / (26.28 - b);
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] ImPlot Enums
 //-----------------------------------------------------------------------------
@@ -227,10 +264,13 @@ typedef int ImPlotTimeFmt;     // -> enum ImPlotTimeFmt_
 
 // XY axes scaling combinations
 enum ImPlotScale_ {
-    ImPlotScale_LinLin, // linear x, linear y
-    ImPlotScale_LogLin, // log x,    linear y
-    ImPlotScale_LinLog, // linear x, log y
-    ImPlotScale_LogLog  // log x,    log y
+    ImPlotScale_LinLin,  // linear x, linear y
+    ImPlotScale_LogLin,  // log x,    linear y
+    ImPlotScale_LinLog,  // linear x, log y
+    ImPlotScale_LogLog,  // log x,    log y
+    ImPlotScale_LinMel,  // linear x, mel y 
+    ImPlotScale_LinErb,  // linear x, erb y
+    ImPlotScale_LinBark  // linear x, bark y
 };
 
 enum ImPlotTimeUnit_ {
@@ -749,6 +789,9 @@ struct ImPlotAxis
             double t = (plt - Range.Min) / Range.Size();
             plt = ImPow(10, t * LogD) * Range.Min;
         }
+        else if (IsMel())   plt = ImMelInverse(plt);
+        else if (IsErb())   plt = ImErbInverse(plt);
+        else if (IsBark())  plt = ImBarkInverse(plt);
         return plt;
     }
 
@@ -758,6 +801,9 @@ struct ImPlotAxis
             double t = ImLog10(plt / Range.Min) / LogD;
             plt      = ImLerp(Range.Min, Range.Max, (float)t);
         }
+        else if (IsMel())   plt = ImMel(plt);
+        else if (IsErb())   plt = ImErb(plt);
+        else if (IsBark())  plt = ImBark(plt);
         return (float)(PixelMin + LinM * (plt - Range.Min));
     }
 
@@ -810,9 +856,13 @@ struct ImPlotAxis
     inline bool IsInputLockedMin()  const { return IsLockedMin() || IsAutoFitting();                                                         }
     inline bool IsInputLockedMax()  const { return IsLockedMax() || IsAutoFitting();                                                         }
     inline bool IsInputLocked()     const { return IsLocked()    || IsAutoFitting();                                                         }
-    inline bool IsTime()            const { return ImHasFlag(Flags, ImPlotAxisFlags_Time);                                                   }
-    inline bool IsLog()             const { return ImHasFlag(Flags, ImPlotAxisFlags_LogScale);                                               }
+    inline bool IsTime()            const { return ImHasFlag(Flags, ImPlotAxisFlags_Time);                                                    }
+    inline bool IsLog()             const { return ImHasFlag(Flags, ImPlotAxisFlags_LogScale);                                              }
     inline bool HasMenus()          const { return !ImHasFlag(Flags, ImPlotAxisFlags_NoMenus);                                               }
+
+    inline bool IsMel()   const { return ImHasFlag(Flags, ImPlotAxisFlags_MelScale);  }
+    inline bool IsErb()   const { return ImHasFlag(Flags, ImPlotAxisFlags_ErbScale);  }
+    inline bool IsBark()  const { return ImHasFlag(Flags, ImPlotAxisFlags_BarkScale); }
 
     void PushLinks() {
         if (LinkedMin) { *LinkedMin = Range.Min; }
@@ -1280,7 +1330,13 @@ static inline ImPlotScale GetCurrentScale() {
     ImPlotPlot& plot = *GetCurrentPlot();
     ImPlotAxis& x = plot.Axes[plot.CurrentX];
     ImPlotAxis& y = plot.Axes[plot.CurrentY];
-    if (!x.IsLog() && !y.IsLog())
+    if (!x.IsLog() && y.IsMel())
+        return ImPlotScale_LinMel;
+    else if (!x.IsLog() && y.IsErb())
+        return ImPlotScale_LinErb;
+    else if (!x.IsLog() && y.IsBark())
+        return ImPlotScale_LinBark;
+    else if (!x.IsLog() && !y.IsLog())
         return ImPlotScale_LinLin;
     else if (x.IsLog() && !y.IsLog())
         return ImPlotScale_LogLin;
