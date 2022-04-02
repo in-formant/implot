@@ -1342,6 +1342,12 @@ static inline ImPlotScale GetCurrentScale() {
         return ImPlotScale_LogLin;
     else if (!x.IsLog() && y.IsLog())
         return ImPlotScale_LinLog;
+    else if (!x.IsLog() && y.IsMel())
+        return ImPlotScale_LinMel;
+    else if (!x.IsLog() && y.IsMel())
+        return ImPlotScale_LinMel;
+    else if (!x.IsLog() && y.IsMel())
+        return ImPlotScale_LinMel;
     else
         return ImPlotScale_LogLog;
 }
