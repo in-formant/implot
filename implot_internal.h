@@ -653,6 +653,9 @@ struct ImPlotAxis
     float                Datum1, Datum2;
     float                PixelMin, PixelMax;
     double               LinM, LogD;
+    double               MelM, MelR;
+    double               ErbM, ErbR;
+    double               BarkM, BarkR;
     ImRect               HoverRect;
     int                  LabelOffset;
     ImU32                ColorMaj, ColorMin, ColorTxt, ColorBg, ColorHov, ColorAct, ColorHiLi;
@@ -781,6 +784,12 @@ struct ImPlotAxis
     inline void UpdateTransformCache() {
         LinM = (PixelMax - PixelMin) / Range.Size();
         LogD = IsLog() ? ImLog10(Range.Max / Range.Min) : 0;
+        MelM = ImMel(Range.Min);
+        MelR = ImMel(Range.Max) - MelM;
+        ErbM = ImErb(Range.Min);
+        ErbR = ImErb(Range.Max) - ErbM;
+        BarkM = ImBark(Range.Min);
+        BarkR = ImBark(Range.Max) - BarkM;
     }
 
     inline double PixelsToPlot(float pix) const {
@@ -789,9 +798,18 @@ struct ImPlotAxis
             double t = (plt - Range.Min) / Range.Size();
             plt = ImPow(10, t * LogD) * Range.Min;
         }
-        else if (IsMel())   plt = ImMelInverse(plt);
-        else if (IsErb())   plt = ImErbInverse(plt);
-        else if (IsBark())  plt = ImBarkInverse(plt);
+        else if (IsMel()) {
+            double t = (pix - PixelMin) / (PixelMax - PixelMin) * MelR + MelM;
+            plt = ImMelInverse(t);
+        }
+        else if (IsErb()) {
+            double t = (pix - PixelMin) / (PixelMax - PixelMin) * ErbR + ErbM;
+            plt = ImErbInverse(plt);
+        }
+        else if (IsBark()) {
+            double t = (pix - PixelMin) / (PixelMax - PixelMin) * BarkR + BarkM;
+            plt = ImBarkInverse(plt);
+        }
         return plt;
     }
 
@@ -801,9 +819,18 @@ struct ImPlotAxis
             double t = ImLog10(plt / Range.Min) / LogD;
             plt      = ImLerp(Range.Min, Range.Max, (float)t);
         }
-        else if (IsMel())   plt = ImMel(plt);
-        else if (IsErb())   plt = ImErb(plt);
-        else if (IsBark())  plt = ImBark(plt);
+        else if (IsMel()) {
+            double t = (ImMel(plt) - MelM) / MelR;
+            plt = ImLerp(Range.Min, Range.Max, (float)t);
+        }
+        else if (IsErb()) {
+            double t = (ImErb(plt) - ErbM) / ErbR;
+            plt = ImLerp(Range.Min, Range.Max, (float)t);
+        }  
+        else if (IsBark()) {
+            double t = (ImBark(plt) - BarkM) / BarkR;
+            plt = ImLerp(Range.Min, Range.Max, (float)t);
+        }
         return (float)(PixelMin + LinM * (plt - Range.Min));
     }
 

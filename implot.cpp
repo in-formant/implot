@@ -738,6 +738,15 @@ void AddTicksLogarithmic(const ImPlotRange& range, float pix, bool vertical, ImP
     }
 }
 
+void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
+    if (range.Min < 2500 && range.Max > 2500) {
+        AddTicksDefault(ImPlotRange{range.Min, 2500}, pix, vertical, ticks, formatter, data);
+    }
+    if (range.Max > 2500) {
+        AddTicksDefault(ImPlotRange{2500, range.Max}, pix, vertical, ticks, formatter, data);
+    }
+}
+
 void AddTicksCustom(const double* values, const char* const labels[], int n, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
     for (int i = 0; i < n; ++i) {
         if (labels != NULL) {
@@ -2397,8 +2406,15 @@ void SetupFinish() {
     for (int i = 0; i < IMPLOT_NUM_Y_AXES; i++) {
         ImPlotAxis& axis = plot.YAxis(i);
         if (axis.WillRender() && axis.ShowDefaultTicks) {
-            if (axis.IsLog() || axis.IsMel() || axis.IsErb() || axis.IsBark())
+            if (axis.IsLog())
                 AddTicksLogarithmic(axis.Range,
+                                    plot_height,
+                                    true,
+                                    axis.Ticks,
+                                    axis.Formatter     ? axis.Formatter  : DefaultFormatter,
+                                    (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
+            else if (axis.IsMel() || axis.IsErb() || axis.IsBark())
+                AddTicksPseudolog(axis.Range,
                                     plot_height,
                                     true,
                                     axis.Ticks,
@@ -2425,10 +2441,17 @@ void SetupFinish() {
         if (axis.WillRender() && axis.ShowDefaultTicks) {
             if (axis.IsTime())
                 AddTicksTime(axis.Range, plot_width, axis.Ticks);
-            else if (axis.IsLog() || axis.IsMel() || axis.IsErb() || axis.IsBark())
+            else if (axis.IsLog())
                 AddTicksLogarithmic(axis.Range,
                                     plot_width,
                                     false,
+                                    axis.Ticks,
+                                    axis.Formatter     ? axis.Formatter  : DefaultFormatter,
+                                    (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
+            else if (axis.IsMel() || axis.IsErb() || axis.IsBark())
+                AddTicksPseudolog(axis.Range,
+                                    plot_height,
+                                    true,
                                     axis.Ticks,
                                     axis.Formatter     ? axis.Formatter  : DefaultFormatter,
                                     (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
