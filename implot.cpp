@@ -739,11 +739,12 @@ void AddTicksLogarithmic(const ImPlotRange& range, float pix, bool vertical, ImP
 }
 
 void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
-    if (range.Min < 2500 && range.Max > 2500) {
-        AddTicksDefault(ImPlotRange{range.Min, 2500}, pix, vertical, ticks, formatter, data);
+    static constexpr double cutoff = 4000;
+    if (range.Min < cutoff && range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{range.Min, cutoff}, pix, vertical, ticks, formatter, data);
     }
-    if (range.Max > 2500) {
-        AddTicksDefault(ImPlotRange{2500, range.Max}, pix, vertical, ticks, formatter, data);
+    if (range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{cutoff, range.Max}, pix, vertical, ticks, formatter, data);
     }
 }
 
