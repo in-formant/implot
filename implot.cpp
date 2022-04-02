@@ -2397,7 +2397,7 @@ void SetupFinish() {
     for (int i = 0; i < IMPLOT_NUM_Y_AXES; i++) {
         ImPlotAxis& axis = plot.YAxis(i);
         if (axis.WillRender() && axis.ShowDefaultTicks) {
-            if (!axis.IsLin())
+            if (axis.IsLog() || axis.IsMel() || axis.IsErb() || axis.IsBark())
                 AddTicksLogarithmic(axis.Range,
                                     plot_height,
                                     true,
@@ -2425,7 +2425,7 @@ void SetupFinish() {
         if (axis.WillRender() && axis.ShowDefaultTicks) {
             if (axis.IsTime())
                 AddTicksTime(axis.Range, plot_width, axis.Ticks);
-            else if (!axis.IsLin())
+            else if (axis.IsLog() || axis.IsMel() || axis.IsErb() || axis.IsBark())
                 AddTicksLogarithmic(axis.Range,
                                     plot_width,
                                     false,
