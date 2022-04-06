@@ -67,7 +67,8 @@ namespace Backend {
         const ImVec2& coords_max,
         const ImPlotPoint& bounds_min,
         const ImPlotPoint& bounds_max,
-        int scale,
+        int scale_x,
+        int scale_y,
         bool reverse_y,
         ImPlotColormap cmap,
         ImDrawList& DrawList);

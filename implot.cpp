@@ -753,6 +753,16 @@ void AddTicksCustom(const double* values, const char* const labels[], int n, ImP
     }
 }
 
+void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
+    static constexpr double cutoff = 4000;
+    if (range.Min < cutoff && range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{range.Min, cutoff}, pix, vertical, ticks, formatter, data);
+    }
+    if (range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{cutoff, range.Max}, pix, vertical, ticks, formatter, data);
+    }
+}
+
 //-----------------------------------------------------------------------------
 // Time Ticks and Utils
 //-----------------------------------------------------------------------------
@@ -1357,7 +1367,12 @@ void ShowAxisContextMenu(ImPlotAxis& axis, ImPlotAxis* equal_axis, bool time_all
 
     ImGui::CheckboxFlags("Auto-Fit",(unsigned int*)&axis.Flags, ImPlotAxisFlags_AutoFit);
     BeginDisabledControls(axis.IsTime() && time_allowed);
-    ImGui::CheckboxFlags("Log Scale",(unsigned int*)&axis.Flags, ImPlotAxisFlags_LogScale);
+
+    int scale = axis.Scale;
+    if (ImGui::Combo("Scale", &scale, "Linear\0Logarithmic\0Mel\0ERB\0Bark\0")) {
+        axis.SetScale(scale);
+    }
+
     EndDisabledControls(axis.IsTime() && time_allowed);
     if (time_allowed) {
         BeginDisabledControls(axis.IsLog());
@@ -2047,6 +2062,20 @@ void SetupAxis(ImAxis idx, const char* label, ImPlotAxisFlags flags) {
     axis.Enabled = true;
     // set label
     plot.SetAxisLabel(axis,label);
+    // set scale from flags if applicable (Lin or Log, and not Time)
+    if (plot.JustCreated || flags != axis.PreviousFlags) {
+        if (!ImHasFlag(flags, ImPlotAxisFlags_Time)) {
+            IM_ASSERT_USER_ERROR(!(ImHasFlag(flags, ImPlotAxisFlags_LogScale) && ImHasFlag(flags, ImPlotAxisFlags_OtherScale)),
+                                "ImPlotAxisFlags_LogScale and ImPlotAxisFlags_OtherScale cannot be enabled at the same time!");
+
+            if (ImHasFlag(flags, ImPlotAxisFlags_LogScale))
+                axis.SetScale(ImAxisScale_Log);
+            else if (ImHasFlag(flags, ImPlotAxisFlags_OtherScale))
+                ; // This is expected to be set by SetupAxisScale
+            else
+                axis.SetScale(ImAxisScale_Linear);
+        }
+    }
     // cache colors
     UpdateAxisColors(axis);
 }
@@ -2116,6 +2145,18 @@ void SetupAxisTicks(ImAxis idx, double v_min, double v_max, int n_ticks, const c
     IM_ASSERT_USER_ERROR(n_ticks > 1, "The number of ticks must be greater than 1");
     FillRange(GImPlot->TempDouble1, n_ticks, v_min, v_max);
     SetupAxisTicks(idx, GImPlot->TempDouble1.Data, n_ticks, labels, show_default);
+}
+
+void SetupAxisScale(ImAxis idx, ImAxisScale scale, ImPlotCond cond)
+{
+    IM_ASSERT_USER_ERROR(GImPlot->CurrentPlot != NULL && !GImPlot->CurrentPlot->SetupLocked,
+                         "Setup needs to be called after BeginPlot and before any setup locking functions (e.g. PlotX)!");    // get plot and axis
+    ImPlotPlot& plot = *GImPlot->CurrentPlot;
+    ImPlotAxis& axis = plot.Axes[idx];
+    IM_ASSERT_USER_ERROR(axis.Enabled, "Axis is not enabled! Did you forget to call SetupAxis()?");
+    if (!plot.Initialized || cond == ImPlotCond_Always)
+        axis.SetScale(scale);
+    axis.ScaleCond = cond;
 }
 
 void SetupAxes(const char* x_label, const char* y_label, ImPlotAxisFlags x_flags, ImPlotAxisFlags y_flags) {
@@ -2404,6 +2445,13 @@ void SetupFinish() {
                                     axis.Ticks,
                                     axis.Formatter     ? axis.Formatter  : DefaultFormatter,
                                     (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
+            else if (axis.IsMel() || axis.IsErb() || axis.IsBark())
+                AddTicksPseudolog(axis.Range,
+                                    plot_height,
+                                    true,
+                                    axis.Ticks,
+                                    axis.Formatter     ? axis.Formatter  : DefaultFormatter,
+                                    (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
             else
                 AddTicksDefault(axis.Range,
                                 plot_height,
@@ -2429,6 +2477,13 @@ void SetupFinish() {
                 AddTicksLogarithmic(axis.Range,
                                     plot_width,
                                     false,
+                                    axis.Ticks,
+                                    axis.Formatter     ? axis.Formatter  : DefaultFormatter,
+                                    (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
+            else if (axis.IsMel() || axis.IsErb() || axis.IsBark())
+                AddTicksPseudolog(axis.Range,
+                                    plot_height,
+                                    true,
                                     axis.Ticks,
                                     axis.Formatter     ? axis.Formatter  : DefaultFormatter,
                                     (axis.Formatter && axis.FormatterData) ? axis.FormatterData : axis.HasFormatSpec ? axis.FormatSpec : (void*)IMPLOT_LABEL_FORMAT);
@@ -4925,7 +4980,10 @@ void ShowAxisMetrics(const ImPlotPlot& plot, const ImPlotAxis& axis) {
         ImGui::BulletText("PixelMin: %f", axis.PixelMin);
         ImGui::BulletText("PixelMax: %f", axis.PixelMax);
         ImGui::BulletText("LinM: %f", axis.LinM);
-        ImGui::BulletText("LogD: %f", axis.LogD);
+        ImGui::BulletText("LogM,R: %f, %f", axis.LogM, axis.LogR);
+        ImGui::BulletText("MelM,R: %f, %f", axis.MelM, axis.MelR);
+        ImGui::BulletText("ErbM,R: %f, %f", axis.ErbM, axis.ErbR);
+        ImGui::BulletText("BarkM,R: %f, %f", axis.BarkM, axis.BarkR);
         ImGui::TreePop();
     }
 

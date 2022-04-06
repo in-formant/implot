@@ -75,6 +75,7 @@ struct ImPlotContext;             // ImPlot context (opaque struct, see implot_i
 
 // Enums/Flags
 typedef int ImAxis;               // -> enum ImAxis_
+typedef int ImAxisScale;          // -> enum ImAxisScale_
 typedef int ImPlotFlags;          // -> enum ImPlotFlags_
 typedef int ImPlotAxisFlags;      // -> enum ImPlotAxisFlags_
 typedef int ImPlotSubplotFlags;   // -> enum ImPlotSubplotFlags_
@@ -101,6 +102,17 @@ enum ImAxis_ {
     ImAxis_Y3,     // disabled by default
     // bookeeping
     ImAxis_COUNT
+};
+
+// Axis scales.
+enum ImAxisScale_ {
+    ImAxisScale_Linear = 0,
+    ImAxisScale_Log,
+    ImAxisScale_Mel,
+    ImAxisScale_Erb,
+    ImAxisScale_Bark,
+    // Count
+    ImAxisScale_COUNT
 };
 
 // Options for plots (see BeginPlot).
@@ -137,6 +149,7 @@ enum ImPlotAxisFlags_ {
     ImPlotAxisFlags_RangeFit      = 1 << 12, // axis will only fit points if the point is in the visible range of the **orthogonal** axis
     ImPlotAxisFlags_LockMin       = 1 << 13, // the axis minimum value will be locked when panning/zooming
     ImPlotAxisFlags_LockMax       = 1 << 14, // the axis maximum value will be locked when panning/zooming
+    ImPlotAxisFlags_OtherScale    = 1 << 15, // use a different scale than linear or log (specified elsewhere)
     ImPlotAxisFlags_Lock          = ImPlotAxisFlags_LockMin | ImPlotAxisFlags_LockMax,
     ImPlotAxisFlags_NoDecorations = ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoTickLabels,
     ImPlotAxisFlags_AuxDefault    = ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_Opposite
@@ -573,6 +586,8 @@ IMPLOT_API void SetupAxisFormat(ImAxis axis, ImPlotFormatter formatter, void* da
 IMPLOT_API void SetupAxisTicks(ImAxis axis, const double* values, int n_ticks, const char* const labels[] = NULL, bool keep_default = false);
 // Sets an axis' ticks and optionally the labels for the next plot. To keep the default ticks, set #keep_default=true.
 IMPLOT_API void SetupAxisTicks(ImAxis axis, double v_min, double v_max, int n_ticks, const char* const labels[] = NULL, bool keep_default = false);
+// Sets an axis scale. 
+IMPLOT_API void SetupAxisScale(ImAxis axis, ImAxisScale scale, ImPlotCond cond = ImPlotCond_Once);
 
 // Sets the label and/or flags for primary X and Y axes (shorthand for two calls to SetupAxis).
 IMPLOT_API void SetupAxes(const char* x_label, const char* y_label, ImPlotAxisFlags x_flags = ImPlotAxisFlags_None, ImPlotAxisFlags y_flags = ImPlotAxisFlags_None);

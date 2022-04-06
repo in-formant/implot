@@ -31,6 +31,9 @@ using namespace gl;
 #include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
 #endif
 
+#include <iostream>
+#include <vector>
+
 namespace ImPlot {
 namespace Backend {
 
@@ -40,7 +43,7 @@ struct HeatmapShader
 	GLuint AttribLocationProjection = 0; ///< Attribute location for the projection matrix uniform
 	GLuint AttribLocationMinValue = 0;   ///< Attribute location for the minimum value uniform
 	GLuint AttribLocationMaxValue = 0;   ///< Attribute location for the maximum value uniform
-	GLuint AttribLocationAxisLog = 0;    ///< Attribute location for the logarithmic axes uniform
+	GLuint AttribLocationAxisScale = 0;  ///< Attribute location for the axis scale uniform
 	GLuint AttribLocationMinBounds = 0;  ///< Attribute location for the minimum bounds uniform
 	GLuint AttribLocationMaxBounds = 0;  ///< Attribute location for the maximum bounds uniform
 };
@@ -55,14 +58,14 @@ struct HeatmapData
 	ImPlotPoint MaxBounds;        ///< Maximum bounds of the heatmap
 	float MinValue;               ///< Minimum value of the colormap
 	float MaxValue;               ///< Maximum value of the colormap
-	bool AxisLogX;                ///< Whether the X axis is logarithmic or not
-	bool AxisLogY;                ///< Whether the Y axis is logarithmic or not
+	int AxisScaleX;               ///< Whether the X axis is logarithmic or not
+	int AxisScaleY;               ///< Whether the Y axis is logarithmic or not
 
 	HeatmapData() {
 		glGenTextures(1, &HeatmapTexID);
 		glBindTexture(GL_TEXTURE_2D, HeatmapTexID);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 };
@@ -100,65 +103,175 @@ void DestroyContext() {
 	IM_DELETE(Context);
 }
 
-#define HEATMAP_VERTEX_SHADER_CODE                                   \
-	"#version 330 core\n"                                            \
-	"precision mediump float;\n"                                     \
-	"layout (location = %d) in vec2 Position;\n"                     \
-	"layout (location = %d) in vec2 UV;\n"                           \
-	"\n"                                                             \
-	"uniform mat4 ProjMtx;\n"                                        \
-	"out vec2 Frag_UV;\n"                                            \
-	"\n"                                                             \
-	"void main()\n"                                                  \
-	"{\n"                                                            \
-	"    Frag_UV = UV;\n"                                            \
-	"    gl_Position = ProjMtx * vec4(Position.xy, 0.0f, 1.0f);\n"   \
-	"}\n"
+const char* HEATMAP_VERTEX_SHADER_CODE = R"""(
+#version 330 core
+precision mediump float;
+layout (location = %d) in vec2 Position;
+layout (location = %d) in vec2 UV;
 
-#define HEATMAP_FRAGMENT_SHADER_CODE                                  \
-	"#version 330 core\n"                                             \
-	"precision mediump float;\n"                                      \
-	"\n"                                                              \
-	"in vec2 Frag_UV;\n"                                              \
-	"out vec4 Out_Color;\n"                                           \
-	"\n"                                                              \
-	"uniform sampler1D colormap;\n"                                   \
-	"uniform %csampler2D heatmap;\n"                                  \
-	"uniform float min_val;\n"                                        \
-	"uniform float max_val;\n"                                        \
-	"\n"                                                              \
-	"uniform vec2 bounds_min;\n"                                      \
-	"uniform vec2 bounds_max;\n"                                      \
-	"uniform bvec2 ax_log;\n"                                         \
-	"\n"                                                              \
-	"float log_den(float x, float min_rng, float max_rng)\n"          \
-	"{\n"                                                             \
-	"    float minrl = log(min_rng);\n"                               \
-	"    float maxrl = log(max_rng);\n"                               \
-	"\n"                                                              \
-	"    return (exp((maxrl - minrl) * x + minrl) - min_rng) / (max_rng - min_rng);" \
-	"}\n"                                                             \
-	"\n"                                                              \
-	"void main()\n"                                                   \
-	"{\n"                                                             \
-	"    float min_tex_offs = 0.5 / float(textureSize(colormap, 0));\n" \
-	"    float uv_x = ax_log.x ? log_den(Frag_UV.x, bounds_min.x, bounds_max.x) : Frag_UV.x;\n" \
-	"    float uv_y = ax_log.y ? log_den(Frag_UV.y, bounds_min.y, bounds_max.y) : Frag_UV.y;\n" \
-	"\n"                                                               \
-	"    float value = float(texture(heatmap, vec2(uv_x, uv_y)).r);\n" \
-	"    float offset = (value - min_val) / (max_val - min_val);\n"    \
-	"          offset = mix(min_tex_offs, 1.0 - min_tex_offs, clamp(offset, 0.0f, 1.0f));\n" \
-	"    Out_Color = texture(colormap, offset);\n"                     \
-	"}\n"
+uniform mat4 ProjMtx;
+out vec2 Frag_UV;
+
+void main()
+{
+    Frag_UV = UV;
+    gl_Position = ProjMtx * vec4(Position.xy, 0.0f, 1.0f);
+}
+)""";
+
+const char* HEATMAP_FRAGMENT_SHADER_CODE = R"""(
+#version 330 core
+precision mediump float;
+
+in vec2 Frag_UV;
+out vec4 Out_Color;
+
+uniform sampler1D colormap;
+uniform %csampler2D heatmap;
+uniform float min_val;
+uniform float max_val;
+
+uniform vec2 bounds_min;
+uniform vec2 bounds_max;
+uniform ivec2 ax_scale;
+
+const float invln10 = 1 / log(10.0);
+
+float log10(float x) {
+    return log(x) * invln10;
+}
+
+float mel(float f) {
+    return 2595 * log10(1 + f / 700);
+}
+
+float erb(float f) {
+    return 21.33228 * log10(1 + 0.00437 * f);
+}
+
+float bark(float f) {
+    float b = (26.81 * f) / (1960 + f) - 0.53;
+    if (b < 2)
+        b = b + 0.15 * (2 - b);
+    if (b > 20.0)
+        b = b + 0.22 * (b - 20.1);
+    return b;
+}
+
+float melInv(float m) {
+    return 700 * (pow(10, m / 2595) - 1);
+}
+
+float erbInv(float erb) {
+    return (pow(10, erb / 21.33228) - 1) / 0.00437;
+}
+
+float barkInv(float b) {
+    if (b < 2)
+        b = (b - 0.3) / 0.85;
+    if (b > 20.1)
+        b = (b + 4.422) / 1.22;
+    return 1960 * (b + 0.53) / (26.28 - b);
+}
+
+float convert_scale(int scale, float x, float min_rng, float max_rng)
+{
+    if (scale == 0) // Linear
+    {
+        return x;
+    }
+    float t;
+    if (scale == 1) // Logarithmic
+    {
+        float minrl = log10(min_rng);
+        float maxrl = log10(max_rng);
+
+        t = pow(10, x * (maxrl - minrl) + minrl);
+    }
+    else if (scale == 2) // Mel
+    {
+        float minrl = mel(min_rng);
+        float maxrl = mel(max_rng);
+
+        t = melInv(x * (maxrl - minrl) + minrl);
+    }
+    else if (scale == 3) // ERB
+    {
+        float minrl = erb(min_rng);
+        float maxrl = erb(max_rng);
+
+        t = erbInv(x * (maxrl - minrl) + minrl);
+    }
+    else if (scale == 4) // Bark
+    {
+        float minrl = bark(min_rng);
+        float maxrl = bark(max_rng);
+
+        t = barkInv(x * (maxrl - minrl) + minrl);
+    }
+    return (t - min_rng) / (max_rng - min_rng);
+}
+
+void main()
+{
+    float min_tex_offs = 0.5 / float(textureSize(colormap, 0));
+
+    float uv_x = convert_scale(ax_scale.x, Frag_UV.x, bounds_min.x, bounds_max.x);
+    float uv_y = 1 - convert_scale(ax_scale.y, 1 - Frag_UV.y, bounds_min.y, bounds_max.y);
+
+    float value = float(texture(heatmap, vec2(uv_x, uv_y)).r);
+    float offset = (value - min_val) / (max_val - min_val);
+          offset = mix(min_tex_offs, 1.0 - min_tex_offs, clamp(offset, 0.0f, 1.0f));
+    Out_Color = texture(colormap, offset);
+}
+)""";
 
 static void CompileShader(HeatmapShader& ShaderProgram, GLchar* VertexShaderCode, GLchar* FragmentShaderCode) {
+    GLint isCompiled;
+
 	GLuint VertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(VertexShader, 1, &VertexShaderCode, nullptr);
 	glCompileShader(VertexShader);
 
+    glGetShaderiv(VertexShader, GL_COMPILE_STATUS, &isCompiled);
+    if(isCompiled == GL_FALSE)
+    {
+        GLint maxLength = 0;
+        glGetShaderiv(VertexShader, GL_INFO_LOG_LENGTH, &maxLength);
+
+        // The maxLength includes the NULL character
+        std::vector<GLchar> errorLog(maxLength);
+        glGetShaderInfoLog(VertexShader, maxLength, &maxLength, &errorLog[0]);
+
+        std::cerr << errorLog.data() << std::endl;
+
+        // Provide the infolog in whatever manor you deem best.
+        // Exit with failure.
+        glDeleteShader(VertexShader); // Don't leak the shader.
+        return;
+    }
+
 	GLuint FragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(FragmentShader, 1, &FragmentShaderCode, nullptr);
 	glCompileShader(FragmentShader);
+
+    glGetShaderiv(FragmentShader, GL_COMPILE_STATUS, &isCompiled);
+    if(isCompiled == GL_FALSE)
+    {
+        GLint maxLength = 0;
+        glGetShaderiv(FragmentShader, GL_INFO_LOG_LENGTH, &maxLength);
+
+        // The maxLength includes the NULL character
+        std::vector<GLchar> errorLog(maxLength);
+        glGetShaderInfoLog(FragmentShader, maxLength, &maxLength, &errorLog[0]);
+
+        std::cerr << errorLog.data() << std::endl;
+
+        // Provide the infolog in whatever manor you deem best.
+        // Exit with failure.
+        glDeleteShader(FragmentShader); // Don't leak the shader.
+        return;
+    }
 
 	ShaderProgram.ID = glCreateProgram();
 	glAttachShader(ShaderProgram.ID, VertexShader);
@@ -175,7 +288,7 @@ static void CompileShader(HeatmapShader& ShaderProgram, GLchar* VertexShaderCode
 	ShaderProgram.AttribLocationMaxValue   = glGetUniformLocation(ShaderProgram.ID, "max_val");
 	ShaderProgram.AttribLocationMinBounds  = glGetUniformLocation(ShaderProgram.ID, "bounds_min");
 	ShaderProgram.AttribLocationMaxBounds  = glGetUniformLocation(ShaderProgram.ID, "bounds_max");
-	ShaderProgram.AttribLocationAxisLog    = glGetUniformLocation(ShaderProgram.ID, "ax_log");
+	ShaderProgram.AttribLocationAxisScale  = glGetUniformLocation(ShaderProgram.ID, "ax_scale");
 
 	glUseProgram(ShaderProgram.ID);
 	glUniform1i(glGetUniformLocation(ShaderProgram.ID, "heatmap"), 0); // Set texture slot of heatmap texture
@@ -192,15 +305,15 @@ static void CreateHeatmapShader(const ImDrawList*, const ImDrawCmd*) {
 	GLuint AttribLocationVtxUV  = (GLuint)glGetAttribLocation(Context.ImGuiShader, "UV");
 
 	GLchar* VertexShaderCode = new GLchar[1000];
-	GLchar* FragmentShaderCode = new GLchar[1000];
+	GLchar* FragmentShaderCode = new GLchar[3000];
 
 	snprintf(VertexShaderCode, 1000, HEATMAP_VERTEX_SHADER_CODE, AttribLocationVtxPos, AttribLocationVtxUV);
-	snprintf(FragmentShaderCode, 1000, HEATMAP_FRAGMENT_SHADER_CODE, ' ');
+	snprintf(FragmentShaderCode, 3000, HEATMAP_FRAGMENT_SHADER_CODE, ' ');
 
 	CompileShader(Context.ShaderFloat, VertexShaderCode, FragmentShaderCode);
 
 	snprintf(VertexShaderCode, 1000, HEATMAP_VERTEX_SHADER_CODE, AttribLocationVtxPos, AttribLocationVtxUV);
-	snprintf(FragmentShaderCode, 1000, HEATMAP_FRAGMENT_SHADER_CODE, 'i');
+	snprintf(FragmentShaderCode, 3000, HEATMAP_FRAGMENT_SHADER_CODE, 'i');
 
 	CompileShader(Context.ShaderInt, VertexShaderCode, FragmentShaderCode);
 	glUseProgram(0);
@@ -228,7 +341,7 @@ static void RenderCallback(const ImDrawList*, const ImDrawCmd* cmd) {
 	glUniformMatrix4fv(data.ShaderProgram->AttribLocationProjection, 1, GL_FALSE, &OrthoProjection[0][0]);
 	glUniform1f(data.ShaderProgram->AttribLocationMinValue, data.MinValue); // Set minimum range
 	glUniform1f(data.ShaderProgram->AttribLocationMaxValue, data.MaxValue); // Set maximum range
-	glUniform2i(data.ShaderProgram->AttribLocationAxisLog, data.AxisLogX, data.AxisLogY); // Logarithmic axis
+	glUniform2i(data.ShaderProgram->AttribLocationAxisScale, data.AxisScaleX, data.AxisScaleY); // Logarithmic axis
 	glUniform2f(data.ShaderProgram->AttribLocationMinBounds, (float)data.MinBounds.x, (float)data.MinBounds.y); // Set minimum bounds
 	glUniform2f(data.ShaderProgram->AttribLocationMaxBounds, (float)data.MaxBounds.x, (float)data.MaxBounds.y); // Set maximum bounds
 }
@@ -250,8 +363,8 @@ void AddColormap(const ImU32* keys, int count, bool qual) {
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_1D, textureID);
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGB, count, 0, GL_RGBA, GL_UNSIGNED_BYTE, keys);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, qual ? GL_NEAREST : GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, qual ? GL_NEAREST : GL_LINEAR);
 	glBindTexture(GL_TEXTURE_1D, 0);
@@ -295,7 +408,8 @@ void RenderHeatmap(int itemID,
 				   const ImVec2& coords_max,
 				   const ImPlotPoint& bounds_min,
 				   const ImPlotPoint& bounds_max,
-	               ImPlotScale scale,
+	               int scale_x,
+                   int scale_y,
 				   bool reverse_y,
 				   ImPlotColormap cmap,
 				   ImDrawList& DrawList)
@@ -306,8 +420,8 @@ void RenderHeatmap(int itemID,
 	data.ColormapTexID = Context.ColormapIDs[cmap];
 	data.MinValue = scale_min;
 	data.MaxValue = scale_max;
-	data.AxisLogX = scale == ImPlotScale_LogLin || scale == ImPlotScale_LogLog;
-	data.AxisLogY = scale == ImPlotScale_LinLog || scale == ImPlotScale_LogLog;
+	data.AxisScaleX = scale_x;
+	data.AxisScaleY = scale_y;
 	data.MinBounds = bounds_min;
 	data.MaxBounds = bounds_max;
 	data.ShaderProgram = (data_type == ImGuiDataType_Float || data_type == ImGuiDataType_Double ? &Context.ShaderFloat : &Context.ShaderInt);

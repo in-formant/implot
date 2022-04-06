@@ -476,45 +476,87 @@ struct GetterError {
 
 // Transforms convert points in plot space (i.e. ImPlotPoint) to pixel space (i.e. ImVec2)
 
-struct TransformerLin {
-    TransformerLin(double pixMin, double pltMin, double,       double m, double    ) : PixMin(pixMin), PltMin(pltMin), M(m) { }
-    template <typename T> IMPLOT_INLINE float operator()(T p) const { return (float)(PixMin + M * (p - PltMin)); }
-    double PixMin, PltMin, M;
-};
+struct Transformer1D;
 
-struct TransformerLog {
-    TransformerLog(double pixMin, double pltMin, double pltMax, double m, double den) : Den(den), PltMin(pltMin), PltMax(pltMax), PixMin(pixMin), M(m) { }
+using TransformerFn = float (*)(const Transformer1D& t, double p);
+
+struct Transformer1D {
+    Transformer1D(TransformerFn fn, double pixMin, double pltMin, double pltMax, double m,
+                                    double logM, double logR,
+                                    double melM, double melR,
+                                    double erbM, double erbR,
+                                    double barkM, double barkR) : Fn(fn), PltMin(pltMin), PltMax(pltMax), PixMin(pixMin), M(m),
+                                                                  LogM(logM), LogR(logR), MelM(melM), MelR(melR),
+                                                                  ErbM(erbM), ErbR(erbR), BarkM(barkM), BarkR(barkR) { }
     template <typename T> IMPLOT_INLINE float operator()(T p) const {
-        p = p <= 0.0 ? IMPLOT_LOG_ZERO : p;
-        double t = ImLog10(p / PltMin) / Den;
-        p = ImLerp(PltMin, PltMax, (float)t);
-        return (float)(PixMin + M * (p - PltMin));
+        return Fn(*this, p);
     }
-    double Den, PltMin, PltMax, PixMin, M;
+    TransformerFn Fn;
+    double PltMin, PltMax, PixMin, M, Om, Or;
+    double LogM, LogR;
+    double MelM, MelR;
+    double ErbM, ErbR;
+    double BarkM, BarkR;
 };
 
-template <typename TransformerX, typename TransformerY>
-struct TransformerXY {
-    TransformerXY(const ImPlotAxis& x_axis, const ImPlotAxis& y_axis) :
+float TransformerLin(const Transformer1D& tr, double p) {
+    return (float)(tr.PixMin + tr.M * (p - tr.PltMin));
+};
 
-        Tx(x_axis.PixelMin,
+float TransformerLog(const Transformer1D& tr, double p) {
+    p = p <= 0.0 ? IMPLOT_LOG_ZERO : p;
+    double t = (ImLog10(p) - tr.LogM) / tr.LogR;
+    p = ImLerp(tr.PltMin, tr.PltMax, (float)t);
+    return (float)(tr.PixMin + tr.M * (p - tr.PltMin));
+};
+
+float TransformerMel(const Transformer1D& tr, double p) {
+    double t = (ImMel(p) - tr.MelM) / tr.MelR;
+    p = ImLerp(tr.PltMin, tr.PltMax, (float)t);
+    return (float)(tr.PixMin + tr.M * (p - tr.PltMin));
+}
+
+float TransformerErb(const Transformer1D& tr, double p) {
+    double t = (ImErb(p) - tr.ErbM) / tr.ErbR;
+    p = ImLerp(tr.PltMin, tr.PltMax, (float)t);
+    return (float)(tr.PixMin + tr.M * (p - tr.PltMin));
+}
+
+float TransformerBark(const Transformer1D& tr, double p) {
+    double t = (ImBark(p) - tr.BarkM) / tr.BarkR;
+    p = ImLerp(tr.PltMin, tr.PltMax, (float)t);
+    return (float)(tr.PixMin + tr.M * (p - tr.PltMin));
+}
+
+struct TransformerXY {
+    TransformerXY(const ImPlotAxis& x_axis, const ImPlotAxis& y_axis, TransformerFn x_tr, TransformerFn y_tr) :
+
+        Tx(x_tr,
+           x_axis.PixelMin,
            x_axis.Range.Min,
            x_axis.Range.Max,
            x_axis.LinM,
-           x_axis.LogD),
-        Ty(y_axis.PixelMin,
+           x_axis.LogM, x_axis.LogR,
+           x_axis.MelM, x_axis.MelR,
+           x_axis.ErbM, x_axis.ErbR,
+           x_axis.BarkM, x_axis.BarkR),
+        Ty(y_tr,
+           y_axis.PixelMin,
            y_axis.Range.Min,
            y_axis.Range.Max,
            y_axis.LinM,
-           y_axis.LogD)
+           y_axis.LogM, y_axis.LogR,
+           y_axis.MelM, y_axis.MelR,
+           y_axis.ErbM, y_axis.ErbR,
+           y_axis.BarkM, y_axis.BarkR)
     { }
 
-    TransformerXY(const ImPlotPlot& plot) :
-        TransformerXY(plot.Axes[plot.CurrentX], plot.Axes[plot.CurrentY])
+    TransformerXY(const ImPlotPlot& plot, TransformerFn x_tr, TransformerFn y_tr) :
+        TransformerXY(plot.Axes[plot.CurrentX], plot.Axes[plot.CurrentY], x_tr, y_tr)
     { }
 
-    TransformerXY() :
-        TransformerXY(*GImPlot->CurrentPlot)
+    TransformerXY(TransformerFn x_tr, TransformerFn y_tr) :
+        TransformerXY(*GImPlot->CurrentPlot, x_tr, y_tr)
     { }
 
     template <typename P> IMPLOT_INLINE ImVec2 operator()(const P& plt) const {
@@ -523,14 +565,26 @@ struct TransformerXY {
         out.y = Ty(plt.y);
         return out;
     }
-    TransformerX Tx;
-    TransformerY Ty;
+    Transformer1D Tx;
+    Transformer1D Ty;
 };
 
-typedef TransformerXY<TransformerLin,TransformerLin> TransformerLinLin;
-typedef TransformerXY<TransformerLin,TransformerLog> TransformerLinLog;
-typedef TransformerXY<TransformerLog,TransformerLin> TransformerLogLin;
-typedef TransformerXY<TransformerLog,TransformerLog> TransformerLogLog;
+// Gets the XY scale transformer for the current plot and axis
+static inline TransformerXY GetCurrentScaleTransformer() {
+    ImPlotPlot& plot = *GetCurrentPlot();
+    ImPlotAxis& x = plot.Axes[plot.CurrentX];
+    ImPlotAxis& y = plot.Axes[plot.CurrentY];
+
+    static constexpr TransformerFn scaleFns[] = {
+        TransformerLin,
+        TransformerLog,
+        TransformerMel,
+        TransformerErb,
+        TransformerBark,
+    };
+
+    return TransformerXY(x, y, scaleFns[x.Scale], scaleFns[y.Scale]);
+}
 
 //-----------------------------------------------------------------------------
 // PRIMITIVE RENDERERS
@@ -688,9 +742,9 @@ struct StairsRenderer {
 
 
 
-template <typename TGetter1, typename TGetter2, typename TTransformer>
+template <typename TGetter1, typename TGetter2>
 struct ShadedRenderer {
-    IMPLOT_INLINE ShadedRenderer(const TGetter1& getter1, const TGetter2& getter2, const TTransformer& transformer, ImU32 col) :
+    IMPLOT_INLINE ShadedRenderer(const TGetter1& getter1, const TGetter2& getter2, const TransformerXY& transformer, ImU32 col) :
         Getter1(getter1),
         Getter2(getter2),
         Transformer(transformer),
@@ -742,7 +796,7 @@ struct ShadedRenderer {
     }
     const TGetter1& Getter1;
     const TGetter2& Getter2;
-    const TTransformer& Transformer;
+    const TransformerXY& Transformer;
     const int Prims;
     const ImU32 Col;
     mutable ImVec2 P11;
@@ -970,12 +1024,7 @@ IMPLOT_INLINE void PlotLineEx(const char* label_id, const Getter& getter) {
         ImDrawList& DrawList = *GetPlotDrawList();
         if (getter.Count > 1 && s.RenderLine) {
             const ImU32 col_line    = ImGui::GetColorU32(s.Colors[ImPlotCol_Line]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderLineStrip(getter, TransformerLinLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLin: RenderLineStrip(getter, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LinLog: RenderLineStrip(getter, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLog: RenderLineStrip(getter, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
-            }
+            RenderLineStrip(getter, GetCurrentScaleTransformer(), DrawList, s.LineWeight, col_line);
         }
         // render markers
         if (s.Marker != ImPlotMarker_None) {
@@ -984,12 +1033,7 @@ IMPLOT_INLINE void PlotLineEx(const char* label_id, const Getter& getter) {
             // PushPlotClipRect(s.MarkerSize);
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerOutline]);
             const ImU32 col_fill = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerFill]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderMarkers(getter, TransformerLinLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-            }
+            RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
         }
         EndItem();
     }
@@ -1059,12 +1103,7 @@ IMPLOT_INLINE void PlotScatterEx(const char* label_id, const Getter& getter) {
             // PushPlotClipRect(s.MarkerSize);
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerOutline]);
             const ImU32 col_fill = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerFill]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderMarkers(getter, TransformerLinLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-            }
+            RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
         }
         EndItem();
     }
@@ -1127,12 +1166,7 @@ IMPLOT_INLINE void PlotStairsEx(const char* label_id, const Getter& getter) {
         ImDrawList& DrawList = *GetPlotDrawList();
         if (getter.Count > 1 && s.RenderLine) {
             const ImU32 col_line    = ImGui::GetColorU32(s.Colors[ImPlotCol_Line]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderStairs(getter, TransformerLinLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLin: RenderStairs(getter, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LinLog: RenderStairs(getter, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLog: RenderStairs(getter, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
-            }
+            RenderStairs(getter, GetCurrentScaleTransformer(), DrawList, s.LineWeight, col_line);
         }
         // render markers
         if (s.Marker != ImPlotMarker_None) {
@@ -1140,12 +1174,7 @@ IMPLOT_INLINE void PlotStairsEx(const char* label_id, const Getter& getter) {
             PushPlotClipRect(s.MarkerSize);
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerOutline]);
             const ImU32 col_fill = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerFill]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderMarkers(getter, TransformerLinLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLin: RenderMarkers(getter, TransformerLogLin(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LinLog: RenderMarkers(getter, TransformerLinLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLog: RenderMarkers(getter, TransformerLogLog(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-            }
+            RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, s.Marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
         }
         EndItem();
     }
@@ -1210,12 +1239,7 @@ IMPLOT_INLINE void PlotShadedEx(const char* label_id, const Getter1& getter1, co
         ImDrawList & DrawList = *GetPlotDrawList();
         if (s.RenderFill) {
             ImU32 col = ImGui::GetColorU32(s.Colors[ImPlotCol_Fill]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinLin>(getter1,getter2,TransformerLinLin(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
-                case ImPlotScale_LogLin: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLogLin>(getter1,getter2,TransformerLogLin(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
-                case ImPlotScale_LinLog: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLinLog>(getter1,getter2,TransformerLinLog(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
-                case ImPlotScale_LogLog: RenderPrimitives(ShadedRenderer<Getter1,Getter2,TransformerLogLog>(getter1,getter2,TransformerLogLog(), col), DrawList, GImPlot->CurrentPlot->PlotRect); break;
-            }
+            RenderPrimitives(ShadedRenderer<Getter1,Getter2>(getter1,getter2,GetCurrentScaleTransformer(), col), DrawList, GImPlot->CurrentPlot->PlotRect);
         }
         EndItem();
     }
@@ -1617,12 +1641,7 @@ IMPLOT_INLINE void PlotStemsEx(const char* label_id, const GetterM& get_mark, co
         // render stems
         if (s.RenderLine) {
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_Line]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderLineSegments(get_mark, get_base, TransformerLinLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLin: RenderLineSegments(get_mark, get_base, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LinLog: RenderLineSegments(get_mark, get_base, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLog: RenderLineSegments(get_mark, get_base, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
-            }
+            RenderLineSegments(get_mark, get_base, GetCurrentScaleTransformer(), DrawList, s.LineWeight, col_line);
         }
         // render markers
         ImPlotMarker marker = s.Marker == ImPlotMarker_None ? ImPlotMarker_Circle : s.Marker;
@@ -1631,12 +1650,7 @@ IMPLOT_INLINE void PlotStemsEx(const char* label_id, const GetterM& get_mark, co
             PushPlotClipRect(s.MarkerSize);
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerOutline]);
             const ImU32 col_fill = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerFill]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderMarkers(get_mark, TransformerLinLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLin: RenderMarkers(get_mark, TransformerLogLin(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LinLog: RenderMarkers(get_mark, TransformerLinLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-                case ImPlotScale_LogLog: RenderMarkers(get_mark, TransformerLogLog(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill); break;
-            }
+            RenderMarkers(get_mark, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
         }
         EndItem();
     }
@@ -1697,12 +1711,7 @@ void PlotVLines(const char* label_id, const T* xs, int count, int offset, int st
         // render stems
         if (s.RenderLine) {
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_Line]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderLineSegments(get_min, get_max, TransformerLinLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLin: RenderLineSegments(get_min, get_max, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LinLog: RenderLineSegments(get_min, get_max, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLog: RenderLineSegments(get_min, get_max, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
-            }
+            RenderLineSegments(get_min, get_max, GetCurrentScaleTransformer(), DrawList, s.LineWeight, col_line);
         }
         EndItem();
     }
@@ -1735,12 +1744,7 @@ void PlotHLines(const char* label_id, const T* ys, int count, int offset, int st
         // render stems
         if (s.RenderLine) {
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_Line]);
-            switch (GetCurrentScale()) {
-                case ImPlotScale_LinLin: RenderLineSegments(get_min, get_max, TransformerLinLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLin: RenderLineSegments(get_min, get_max, TransformerLogLin(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LinLog: RenderLineSegments(get_min, get_max, TransformerLinLog(), DrawList, s.LineWeight, col_line); break;
-                case ImPlotScale_LogLog: RenderLineSegments(get_min, get_max, TransformerLogLog(), DrawList, s.LineWeight, col_line); break;
-            }
+            RenderLineSegments(get_min, get_max, GetCurrentScaleTransformer(), DrawList, s.LineWeight, col_line);
         }
         EndItem();
     }
@@ -1848,9 +1852,9 @@ struct RectInfo {
     ImU32 Color;
 };
 
-template <typename TGetter, typename TTransformer>
+template <typename TGetter>
 struct RectRenderer {
-    IMPLOT_INLINE RectRenderer(const TGetter& getter, const TTransformer& transformer) :
+    IMPLOT_INLINE RectRenderer(const TGetter& getter, const TransformerXY& transformer) :
         Getter(getter),
         Transformer(transformer),
         Prims(Getter.Count)
@@ -1889,7 +1893,7 @@ struct RectRenderer {
         return true;
     }
     const TGetter& Getter;
-    const TTransformer& Transformer;
+    const TransformerXY& Transformer;
     const int Prims;
     static const int IdxConsumed = 6;
     static const int VtxConsumed = 4;
@@ -1932,8 +1936,8 @@ struct GetterHeatmap {
     const ImPlotPoint HalfSize;
 };
 
-template <typename T, typename Transformer>
-void RenderHeatmap(Transformer transformer, ImDrawList& DrawList, const T* values, int rows, int cols, double scale_min, double scale_max, const char* fmt, const ImPlotPoint& bounds_min, const ImPlotPoint& bounds_max, bool reverse_y) {
+template <typename T>
+void RenderHeatmap(TransformerXY transformer, ImDrawList& DrawList, const T* values, int rows, int cols, double scale_min, double scale_max, const char* fmt, const ImPlotPoint& bounds_min, const ImPlotPoint& bounds_max, bool reverse_y) {
     ImPlotContext& gp = *GImPlot;
     if (scale_min == 0 && scale_max == 0) {
         T temp_min, temp_max;
@@ -1952,19 +1956,38 @@ void RenderHeatmap(Transformer transformer, ImDrawList& DrawList, const T* value
     const double ydir = reverse_y ? -1 : 1;
 #ifdef IMPLOT_BACKEND_HAS_HEATMAP
     if (GImPlot->Style.UseGpuAcceleration) {
-        ImVec2 bmin = transformer(bounds_min);
+
+        ImPlotPlot& plot = *GetCurrentPlot();
+        ImPlotAxis& x = plot.Axes[plot.CurrentX];
+        ImPlotAxis& y = plot.Axes[plot.CurrentY];
+
+        ImPlotPoint bmc(bounds_min);
+        bmc.x = ImConstrainNan(ImConstrainInf(bmc.x));
+        if (x.IsLog())
+            bmc.x = ImConstrainLog(bmc.x);
+        bmc.y = ImConstrainNan(ImConstrainInf(bmc.y));
+        if (y.IsLog())
+            bmc.y = ImConstrainLog(bmc.y);
+
+        ImVec2 bmin = transformer(bmc);
         ImVec2 bmax = transformer(bounds_max);
+    
+        printf("bx_t: %.3f, %.3f\n", bmin.x, bmax.x);
+        printf("by_t: %.3f, %.3f\n", bmin.y, bmax.y);
+
+        printf("bx: %.3f, %.3f\n", bmc.x, bounds_max.x);
+        printf("by: %.3f, %.3f\n", bmc.y, bounds_max.y);
 
         Backend::RenderHeatmap(
             gp.CurrentItem->ID, values, ImGuiDataTypeGetter<T>::Value, rows, cols,
-            (float)scale_min, (float)scale_max, bmin, bmax, bounds_min, bounds_max,
-            GetCurrentScale(), reverse_y, gp.Style.Colormap, DrawList);
+            (float)scale_min, (float)scale_max, bmin, bmax, bmc, bounds_max,
+            x.Scale, y.Scale, reverse_y, gp.Style.Colormap, DrawList);
     }
     else
 #endif
     {
         GetterHeatmap<T> getter(values, rows, cols, scale_min, scale_max, (bounds_max.x - bounds_min.x) / cols, (bounds_max.y - bounds_min.y) / rows, bounds_min.x, yref, ydir);
-        RenderPrimitives(RectRenderer<GetterHeatmap<T>, Transformer>(getter, transformer), DrawList, gp.CurrentPlot->PlotRect);
+        RenderPrimitives(RectRenderer<GetterHeatmap<T>>(getter, transformer), DrawList, gp.CurrentPlot->PlotRect);
     }
     if (fmt != NULL) {
         const double w = (bounds_max.x - bounds_min.x) / cols;
@@ -1998,12 +2021,7 @@ void PlotHeatmap(const char* label_id, const T* values, int rows, int cols, doub
             FitPoint(bounds_max);
         }
         ImDrawList& DrawList = *GetPlotDrawList();
-        switch (GetCurrentScale()) {
-            case ImPlotScale_LinLin: RenderHeatmap(TransformerLinLin(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
-            case ImPlotScale_LogLin: RenderHeatmap(TransformerLogLin(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
-            case ImPlotScale_LinLog: RenderHeatmap(TransformerLinLog(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
-            case ImPlotScale_LogLog: RenderHeatmap(TransformerLogLog(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true); break;
-        }
+        RenderHeatmap(GetCurrentScaleTransformer(), DrawList, values, rows, cols, scale_min, scale_max, fmt, bounds_min, bounds_max, true);
         EndItem();
     }
 }
@@ -2172,12 +2190,7 @@ double PlotHistogram2D(const char* label_id, const T* xs, const T* ys, int count
             FitPoint(range.Max());
         }
         ImDrawList& DrawList = *GetPlotDrawList();
-        switch (GetCurrentScale()) {
-            case ImPlotScale_LinLin: RenderHeatmap(TransformerLinLin(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
-            case ImPlotScale_LogLin: RenderHeatmap(TransformerLogLin(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
-            case ImPlotScale_LinLog: RenderHeatmap(TransformerLinLog(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
-            case ImPlotScale_LogLog: RenderHeatmap(TransformerLogLog(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false); break;
-        }
+        RenderHeatmap(GetCurrentScaleTransformer(), DrawList, &bin_counts.Data[0], y_bins, x_bins, 0, max_count, NULL, range.Min(), range.Max(), false);
         EndItem();
     }
     return max_count;

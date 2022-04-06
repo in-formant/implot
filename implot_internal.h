@@ -216,22 +216,50 @@ static inline ImU32 ImAlphaU32(ImU32 col, float alpha) {
     return col & ~((ImU32)((1.0f-alpha)*255)<<IM_COL32_A_SHIFT);
 }
 
+// Computes the mel frequency for a given Hz frequency.
+template <typename T>
+static inline T ImMel(T f) { return 2595 * ImLog10(1 + f / 700); }
+
+// Computes the ERB frequency for a given Hz frequency.
+template <typename T>
+static inline T ImErb(T f) { return 21.33228 * ImLog10(1 + 0.00437 * f); }
+
+// Computes the Bark frequency for a given Hz frequency.
+template <typename T>
+static inline T ImBark(T f) {
+    double b = (26.81 * f) / (1960 + f) - 0.53;
+    if (b < 2)
+        b = b + 0.15 * (2 - b);
+    if (b > 20.1)
+        b = b + 0.22 * (b - 20.1);
+    return b;
+}
+
+// Computes the Hz frequency for a given mel frequency.
+template <typename T>
+static inline T ImMelInverse(T m) { return 700 * (ImPow(10, m / 2595) - 1); }
+
+// Computes the Hz frequency for a given ERB frequency.
+template <typename T>
+static inline T ImErbInverse(T erb) { return (ImPow(10, erb / 21.33228) - 1) / 0.00437; }
+
+// Computes the Hz frequency for a given Bark frequency.
+template <typename T>
+static inline T ImBarkInverse(T b) {
+    if (b < 2)
+        b = (b - 0.3) / 0.85;
+    if (b > 20.1)
+        b = (b + 4.422) / 1.22;
+    return 1960 * (b + 0.53) / (26.28 - b);
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] ImPlot Enums
 //-----------------------------------------------------------------------------
 
-typedef int ImPlotScale;       // -> enum ImPlotScale_
 typedef int ImPlotTimeUnit;    // -> enum ImPlotTimeUnit_
 typedef int ImPlotDateFmt;     // -> enum ImPlotDateFmt_
 typedef int ImPlotTimeFmt;     // -> enum ImPlotTimeFmt_
-
-// XY axes scaling combinations
-enum ImPlotScale_ {
-    ImPlotScale_LinLin, // linear x, linear y
-    ImPlotScale_LogLin, // log x,    linear y
-    ImPlotScale_LinLog, // linear x, log y
-    ImPlotScale_LogLog  // log x,    log y
-};
 
 enum ImPlotTimeUnit_ {
     ImPlotTimeUnit_Us,  // microsecond
@@ -602,6 +630,8 @@ struct ImPlotAxis
     ImPlotAxisFlags      Flags;
     ImPlotAxisFlags      PreviousFlags;
     ImPlotCond           RangeCond;
+    ImAxisScale          Scale;
+    ImPlotCond           ScaleCond;
     ImPlotTickCollection Ticks;
     ImPlotRange          Range;
     ImPlotRange          FitExtents;
@@ -612,7 +642,11 @@ struct ImPlotAxis
     ImPlotTime           PickerTimeMin, PickerTimeMax;
     float                Datum1, Datum2;
     float                PixelMin, PixelMax;
-    double               LinM, LogD;
+    double               LinM;
+    double               LogM, LogR;
+    double               MelM, MelR;
+    double               ErbM, ErbR;
+    double               BarkM, BarkR;
     ImRect               HoverRect;
     int                  LabelOffset;
     ImU32                ColorMaj, ColorMin, ColorTxt, ColorBg, ColorHov, ColorAct, ColorHiLi;
@@ -622,6 +656,7 @@ struct ImPlotAxis
     bool                 Enabled;
     bool                 Vertical;
     bool                 FitThisFrame;
+    bool                 HasScale;
     bool                 HasRange;
     bool                 HasFormatSpec;
     bool                 ShowDefaultTicks;
@@ -630,6 +665,7 @@ struct ImPlotAxis
 
     ImPlotAxis() {
         Flags            = PreviousFlags = ImPlotAxisFlags_None;
+        Scale            = ImAxisScale_Linear;
         Range.Min        = 0;
         Range.Max        = 1;
         FitExtents.Min   = HUGE_VAL;
@@ -643,7 +679,7 @@ struct ImPlotAxis
         ColorHiLi        = IM_COL32_BLACK_TRANS;
         Formatter        = NULL;
         FormatterData    = NULL;
-        Enabled          = Hovered = Held = FitThisFrame = HasRange = HasFormatSpec = false;
+        Enabled          = Hovered = Held = FitThisFrame = HasScale = HasRange = HasFormatSpec = false;
         ShowDefaultTicks = true;
     }
 
@@ -719,6 +755,38 @@ struct ImPlotAxis
             SetRange(Range.Min - delta, Range.Max + delta);
     }
 
+    inline void SetScale(ImAxisScale scale)
+    {
+        if (HasScale && scale == Scale)
+            return;
+
+        if (scale == ImAxisScale_Linear) {
+            if (IsTime())
+                ImFlipFlag(Flags, ImPlotAxisFlags_Time);
+            else if (IsLog())
+                ImFlipFlag(Flags, ImPlotAxisFlags_LogScale);
+            else
+                ImFlipFlag(Flags, ImPlotAxisFlags_OtherScale);
+        }
+        else if (scale == ImAxisScale_Log) {
+            if (IsTime())
+                ImFlipFlag(Flags, ImPlotAxisFlags_Time);
+            else
+                ImFlipFlag(Flags, ImPlotAxisFlags_OtherScale);
+            ImFlipFlag(Flags, ImPlotAxisFlags_LogScale);
+        }
+        else {
+            if (IsTime())
+                ImFlipFlag(Flags, ImPlotAxisFlags_Time);
+            else if (IsLog())
+                ImFlipFlag(Flags, ImPlotAxisFlags_LogScale);
+            ImFlipFlag(Flags, ImPlotAxisFlags_OtherScale);
+        }
+
+        Scale = scale;
+        HasScale = true;
+    }
+
     inline float PixelSize() const { return ImAbs(PixelMax - PixelMin); }
 
     inline double GetAspect() const { return Range.Size() / PixelSize(); }
@@ -740,14 +808,38 @@ struct ImPlotAxis
 
     inline void UpdateTransformCache() {
         LinM = (PixelMax - PixelMin) / Range.Size();
-        LogD = IsLog() ? ImLog10(Range.Max / Range.Min) : 0;
+        
+        LogM = IsLog() ? ImLog10(Range.Min) : 0;
+        LogR = IsLog() ? ImLog10(Range.Max) - LogM : 0;
+        MelM = IsMel() ? ImMel(Range.Min) : 0;
+        MelR = IsMel() ? ImMel(Range.Max) - MelM : 0;
+        ErbM = IsErb() ? ImErb(Range.Min) : 0;
+        ErbR = IsErb() ? ImErb(Range.Max) - ErbM : 0;
+        BarkM = IsBark() ? ImBark(Range.Min) : 0;
+        BarkR = IsBark() ? ImBark(Range.Max) - BarkM : 0;
+
+        if (IsLog()) {
+            printf("LogM: %.3f, LogR: %.3f\n", LogM, LogR);
+        }
     }
 
     inline double PixelsToPlot(float pix) const {
         double plt = (pix - PixelMin) / LinM + Range.Min;
         if (IsLog()) {
             double t = (plt - Range.Min) / Range.Size();
-            plt = ImPow(10, t * LogD) * Range.Min;
+            plt = ImPow(10, t * LogR + LogM);
+        }
+        else if (IsMel()) {
+            double t = (plt - Range.Min) / Range.Size();
+            plt = ImMelInverse(t * MelR + MelM);
+        }
+        else if (IsErb()) {
+            double t = (plt - Range.Min) / Range.Size();
+            plt = ImErbInverse(t * ErbR + ErbM);
+        }
+        else if (IsBark()) {
+            double t = (plt - Range.Min) / Range.Size();
+            plt = ImBarkInverse(t * BarkR + BarkM);
         }
         return plt;
     }
@@ -755,7 +847,19 @@ struct ImPlotAxis
     inline float PlotToPixels(double plt) const {
         if (IsLog()) {
             plt      = plt <= 0.0 ? IMPLOT_LOG_ZERO : plt;
-            double t = ImLog10(plt / Range.Min) / LogD;
+            double t = (ImLog10(plt) - LogM) / LogR;
+            plt      = ImLerp(Range.Min, Range.Max, (float)t);
+        }
+        else if (IsMel()) {
+            double t = (ImMel(plt) - MelM) / MelR;
+            plt      = ImLerp(Range.Min, Range.Max, (float)t);
+        }
+        else if (IsErb()) {
+            double t = (ImErb(plt) - ErbM) / ErbR;
+            plt      = ImLerp(Range.Min, Range.Max, (float)t);
+        }  
+        else if (IsBark()) {
+            double t = (ImBark(plt) - BarkM) / BarkR;
             plt      = ImLerp(Range.Min, Range.Max, (float)t);
         }
         return (float)(PixelMin + LinM * (plt - Range.Min));
@@ -811,7 +915,11 @@ struct ImPlotAxis
     inline bool IsInputLockedMax()  const { return IsLockedMax() || IsAutoFitting();                                                         }
     inline bool IsInputLocked()     const { return IsLocked()    || IsAutoFitting();                                                         }
     inline bool IsTime()            const { return ImHasFlag(Flags, ImPlotAxisFlags_Time);                                                   }
-    inline bool IsLog()             const { return ImHasFlag(Flags, ImPlotAxisFlags_LogScale);                                               }
+    inline bool IsLinear()          const { return Scale == ImAxisScale_Linear;                                                              }
+    inline bool IsLog()             const { return Scale == ImAxisScale_Log;                                                                 }
+    inline bool IsMel()             const { return Scale == ImAxisScale_Mel;                                                                 }
+    inline bool IsErb()             const { return Scale == ImAxisScale_Erb;                                                                 }
+    inline bool IsBark()            const { return Scale == ImAxisScale_Bark;                                                                }
     inline bool HasMenus()          const { return !ImHasFlag(Flags, ImPlotAxisFlags_NoMenus);                                               }
 
     void PushLinks() {
@@ -1273,21 +1381,6 @@ static inline bool AnyAxesHovered(ImPlotAxis* axes, int count) {
             return true;
     }
     return false;
-}
-
-// Gets the XY scale for the current plot and y-axis (TODO)
-static inline ImPlotScale GetCurrentScale() {
-    ImPlotPlot& plot = *GetCurrentPlot();
-    ImPlotAxis& x = plot.Axes[plot.CurrentX];
-    ImPlotAxis& y = plot.Axes[plot.CurrentY];
-    if (!x.IsLog() && !y.IsLog())
-        return ImPlotScale_LinLin;
-    else if (x.IsLog() && !y.IsLog())
-        return ImPlotScale_LogLin;
-    else if (!x.IsLog() && y.IsLog())
-        return ImPlotScale_LinLog;
-    else
-        return ImPlotScale_LogLog;
 }
 
 // Returns true if the user has requested data to be fit.
