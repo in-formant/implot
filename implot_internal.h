@@ -817,10 +817,6 @@ struct ImPlotAxis
         ErbR = IsErb() ? ImErb(Range.Max) - ErbM : 0;
         BarkM = IsBark() ? ImBark(Range.Min) : 0;
         BarkR = IsBark() ? ImBark(Range.Max) - BarkM : 0;
-
-        if (IsLog()) {
-            printf("LogM: %.3f, LogR: %.3f\n", LogM, LogR);
-        }
     }
 
     inline double PixelsToPlot(float pix) const {

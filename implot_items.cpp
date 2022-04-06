@@ -1971,12 +1971,6 @@ void RenderHeatmap(TransformerXY transformer, ImDrawList& DrawList, const T* val
 
         ImVec2 bmin = transformer(bmc);
         ImVec2 bmax = transformer(bounds_max);
-    
-        printf("bx_t: %.3f, %.3f\n", bmin.x, bmax.x);
-        printf("by_t: %.3f, %.3f\n", bmin.y, bmax.y);
-
-        printf("bx: %.3f, %.3f\n", bmc.x, bounds_max.x);
-        printf("by: %.3f, %.3f\n", bmc.y, bounds_max.y);
 
         Backend::RenderHeatmap(
             gp.CurrentItem->ID, values, ImGuiDataTypeGetter<T>::Value, rows, cols,
