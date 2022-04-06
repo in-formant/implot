@@ -738,6 +738,16 @@ void AddTicksLogarithmic(const ImPlotRange& range, float pix, bool vertical, ImP
     }
 }
 
+void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
+    static constexpr double cutoff = 4000;
+    if (range.Min < cutoff && range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{range.Min, cutoff}, pix, vertical, ticks, formatter, data);
+    }
+    if (range.Max > cutoff) {
+        AddTicksDefault(ImPlotRange{cutoff, range.Max}, pix, vertical, ticks, formatter, data);
+    }
+}
+
 void AddTicksCustom(const double* values, const char* const labels[], int n, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
     for (int i = 0; i < n; ++i) {
         if (labels != NULL) {
@@ -750,16 +760,6 @@ void AddTicksCustom(const double* values, const char* const labels[], int n, ImP
         else {
             ticks.Append(values[i], false, true, formatter, data);
         }
-    }
-}
-
-void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
-    static constexpr double cutoff = 4000;
-    if (range.Min < cutoff && range.Max > cutoff) {
-        AddTicksDefault(ImPlotRange{range.Min, cutoff}, pix, vertical, ticks, formatter, data);
-    }
-    if (range.Max > cutoff) {
-        AddTicksDefault(ImPlotRange{cutoff, range.Max}, pix, vertical, ticks, formatter, data);
     }
 }
 
