@@ -3562,6 +3562,14 @@ ImPlotRect GetPlotLimits(ImAxis x_idx, ImAxis y_idx) {
     return limits;
 }
 
+ImAxisScale GetAxisScale(ImAxis axis) {
+    ImPlotContext& gp = *GImPlot;
+    IM_ASSERT_USER_ERROR(gp.CurrentPlot != NULL, "GetAxisScale() needs to be called between BeginPlot() and EndPlot()!");
+    SetupLock();
+    ImPlotPlot& plot = *gp.CurrentPlot;
+    return plot.Axes[axis].Scale;
+}
+
 bool IsPlotHovered() {
     ImPlotContext& gp = *GImPlot;
     IM_ASSERT_USER_ERROR(gp.CurrentPlot != NULL, "IsPlotHovered() needs to be called between BeginPlot() and EndPlot()!");

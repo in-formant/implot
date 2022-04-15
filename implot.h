@@ -824,6 +824,9 @@ IMPLOT_API ImPlotPoint GetPlotMousePos(ImAxis x_axis = IMPLOT_AUTO, ImAxis y_axi
 // Returns the current plot axis range.
 IMPLOT_API ImPlotRect GetPlotLimits(ImAxis x_axis = IMPLOT_AUTO, ImAxis y_axis = IMPLOT_AUTO);
 
+// Returns the axis scale.
+IMPLOT_API ImAxisScale GetAxisScale(ImAxis axis);
+
 // Returns true if the plot area in the current plot is hovered.
 IMPLOT_API bool IsPlotHovered();
 // Returns true if the axis label area in the current plot is hovered.
