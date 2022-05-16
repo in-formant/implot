@@ -1103,7 +1103,14 @@ IMPLOT_INLINE void PlotScatterEx(const char* label_id, const Getter& getter) {
             // PushPlotClipRect(s.MarkerSize);
             const ImU32 col_line = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerOutline]);
             const ImU32 col_fill = ImGui::GetColorU32(s.Colors[ImPlotCol_MarkerFill]);
-            RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
+            if (s.RenderMarkerLine && s.RenderMarkerFill) {
+                const ImU32 transparent = ImGui::GetColorU32(ImVec4(0,0,0,0));
+                RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize, true, col_line, s.MarkerWeight, false, transparent);
+                RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize - s.MarkerWeight, false, transparent, 0.0f, true, col_fill);
+            }
+            else {
+                RenderMarkers(getter, GetCurrentScaleTransformer(), DrawList, marker, s.MarkerSize, s.RenderMarkerLine, col_line, s.MarkerWeight, s.RenderMarkerFill, col_fill);
+            }
         }
         EndItem();
     }
