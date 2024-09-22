@@ -2310,21 +2310,21 @@ void SetupAxisScale(ImAxis idx, ImPlotScale scale) {
         axis.TransformInverse = TransformInverse_Mel;
         axis.TransformData    = nullptr;
         axis.Locator          = Locator_Log2;
-        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
+        axis.ConstraintRange  = ImPlotRange(1, INFINITY);
         break;
     case ImPlotScale_Bark:
         axis.TransformForward = TransformForward_Bark;
         axis.TransformInverse = TransformInverse_Bark;
         axis.TransformData    = nullptr;
         axis.Locator          = Locator_Log2;
-        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
+        axis.ConstraintRange  = ImPlotRange(1, INFINITY);
         break;
     case ImPlotScale_Erb:
         axis.TransformForward = TransformForward_Erb;
         axis.TransformInverse = TransformInverse_Erb;
         axis.TransformData    = nullptr;
         axis.Locator          = Locator_Log2;
-        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
+        axis.ConstraintRange  = ImPlotRange(1, INFINITY);
         break;
     default:
         axis.TransformForward = nullptr;
