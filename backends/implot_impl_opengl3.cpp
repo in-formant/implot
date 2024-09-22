@@ -31,6 +31,7 @@ using namespace gl;
 #include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
 #endif
 
+#include <functional>
 #include <iostream>
 #include <vector>
 
@@ -399,34 +400,35 @@ void SetHeatmapData(GLuint textureID, const ImU64* values, int rows, int cols) {
 	SetTextureData(textureID, Context.TempU32.Data, rows, cols, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT);
 }
 
-void RenderHeatmap(int itemID,
-                   const void* values,
-				   ImGuiDataType data_type,
-				   int rows,
-				   int cols,
-				   float scale_min,
-				   float scale_max,
-	               const ImVec2& coords_min,
-				   const ImVec2& coords_max,
-				   const ImPlotPoint& bounds_min,
-				   const ImPlotPoint& bounds_max,
-	               int scale_x,
-                   int scale_y,
-				   bool reverse_y,
-				   ImPlotColormap cmap,
-				   ImDrawList& DrawList)
-{
-	ContextData& Context = *((ContextData*)GImPlot->backendCtx);
-	HeatmapData& data = *Context.Heatmaps.GetOrAddByKey(itemID);
-	data.ID = itemID;
-	data.ColormapTexID = Context.ColormapIDs[cmap];
-	data.MinValue = scale_min;
-	data.MaxValue = scale_max;
-	data.AxisScaleX = scale_x;
-	data.AxisScaleY = scale_y;
-	data.MinBounds = bounds_min;
-	data.MaxBounds = bounds_max;
-	data.ShaderProgram = (data_type == ImGuiDataType_Float || data_type == ImGuiDataType_Double ? &Context.ShaderFloat : &Context.ShaderInt);
+		void RenderHeatmap(int itemID,
+		                   const void *values,
+		                   ImGuiDataType data_type,
+		                   int rows,
+		                   int cols,
+		                   float scale_min,
+		                   float scale_max,
+		                   int scale_x,
+		                   int scale_y,
+		                   const ImVec2 &coords_min,
+		                   const ImVec2 &coords_max,
+		                   const ImPlotPoint &bounds_min,
+		                   const ImPlotPoint &bounds_max,
+		                   bool reverse_y,
+		                   ImPlotColormap cmap,
+		                   ImDrawList &DrawList) {
+			ContextData &Context = *((ContextData *) GImPlot->backendCtx);
+			HeatmapData &data = *Context.Heatmaps.GetOrAddByKey(itemID);
+			data.ID = itemID;
+			data.ColormapTexID = Context.ColormapIDs[cmap];
+			data.MinValue = scale_min;
+			data.MaxValue = scale_max;
+			data.AxisScaleX = scale_x;
+			data.AxisScaleY = scale_y;
+			data.MinBounds = bounds_min;
+			data.MaxBounds = bounds_max;
+			data.ShaderProgram = (data_type == ImGuiDataType_Float || data_type == ImGuiDataType_Double
+				                      ? &Context.ShaderFloat
+				                      : &Context.ShaderInt);
 
 	switch(data_type) {
 		case ImGuiDataType_S8:     SetTextureData(data.HeatmapTexID, (const ImS8*) values, rows, cols, GL_R8I,   GL_RED_INTEGER, GL_BYTE          ); break;
