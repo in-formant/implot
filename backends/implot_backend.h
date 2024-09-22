@@ -55,23 +55,22 @@ namespace Backend {
 #endif
 
 #ifdef IMPLOT_BACKEND_HAS_HEATMAP
-    void RenderHeatmap(
-        int itemID,
-        const void* data,
-        ImGuiDataType data_type,
-        int rows,
-        int cols,
-        float scale_min,
-        float scale_max,
-        const ImVec2& coords_min,
-        const ImVec2& coords_max,
-        const ImPlotPoint& bounds_min,
-        const ImPlotPoint& bounds_max,
-        int scale_x,
-        int scale_y,
-        bool reverse_y,
-        ImPlotColormap cmap,
-        ImDrawList& DrawList);
+        void RenderHeatmap(int itemID,
+                           const void *values,
+                           ImGuiDataType data_type,
+                           int rows,
+                           int cols,
+                           float scale_min,
+                           float scale_max,
+                           int scale_x,
+                           int scale_y,
+                           const ImVec2 &coords_min,
+                           const ImVec2 &coords_max,
+                           const ImPlotPoint &bounds_min,
+                           const ImPlotPoint &bounds_max,
+                           bool reverse_y,
+                           ImPlotColormap cmap,
+                           ImDrawList &DrawList);
 #endif
 
 } // namespace Backend

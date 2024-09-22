@@ -2410,77 +2410,99 @@ struct GetterHeatmapColMaj {
     const ImPlotPoint HalfSize;
 };
 
-template <typename T>
-void RenderHeatmap(ImDrawList& draw_list, const T* values, int rows, int cols, double scale_min, double scale_max, const char* fmt, const ImPlotPoint& bounds_min, const ImPlotPoint& bounds_max, bool reverse_y, bool col_maj) {
-    ImPlotContext& gp = *GImPlot;
-    Transformer2 transformer;
-    if (scale_min == 0 && scale_max == 0) {
-        T temp_min, temp_max;
-        ImMinMaxArray(values,rows*cols,&temp_min,&temp_max);
-        scale_min = (double)temp_min;
-        scale_max = (double)temp_max;
-    }
-    if (scale_min == scale_max) {
-        ImVec2 a = transformer(bounds_min);
-        ImVec2 b = transformer(bounds_max);
-        ImU32  col = GetColormapColorU32(0,gp.Style.Colormap);
-        draw_list.AddRectFilled(a, b, col);
-        return;
-    }
-    const double yref = reverse_y ? bounds_max.y : bounds_min.y;
-    const double ydir = reverse_y ? -1 : 1;
-    if (col_maj) {
-        GetterHeatmapColMaj<T> getter(values, rows, cols, scale_min, scale_max, (bounds_max.x - bounds_min.x) / cols, (bounds_max.y - bounds_min.y) / rows, bounds_min.x, yref, ydir);
-        RenderPrimitives1<RendererRectC>(getter);
-    }
-    else {
-        GetterHeatmapRowMaj<T> getter(values, rows, cols, scale_min, scale_max, (bounds_max.x - bounds_min.x) / cols, (bounds_max.y - bounds_min.y) / rows, bounds_min.x, yref, ydir);
-        RenderPrimitives1<RendererRectC>(getter);
-    }
-    // labels
-    if (fmt != nullptr) {
-        const double w = (bounds_max.x - bounds_min.x) / cols;
-        const double h = (bounds_max.y - bounds_min.y) / rows;
-        const ImPlotPoint half_size(w*0.5,h*0.5);
-        int i = 0;
+    template<typename T>
+    void RenderHeatmap(ImDrawList &draw_list, const T *values, int rows, int cols, double scale_min, double scale_max,
+                       const char *fmt, const ImPlotPoint &bounds_min, const ImPlotPoint &bounds_max, bool reverse_y,
+                       bool col_maj) {
+        ImPlotContext &gp = *GImPlot;
+        Transformer2 transformer;
+        if (scale_min == 0 && scale_max == 0) {
+            T temp_min, temp_max;
+            ImMinMaxArray(values, rows * cols, &temp_min, &temp_max);
+            scale_min = (double) temp_min;
+            scale_max = (double) temp_max;
+        }
+        if (scale_min == scale_max) {
+            ImVec2 a = transformer(bounds_min);
+            ImVec2 b = transformer(bounds_max);
+            ImU32 col = GetColormapColorU32(0, gp.Style.Colormap);
+            draw_list.AddRectFilled(a, b, col);
+            return;
+        }
+        const double yref = reverse_y ? bounds_max.y : bounds_min.y;
+        const double ydir = reverse_y ? -1 : 1;
         if (col_maj) {
-            for (int c = 0; c < cols; ++c) {
-                for (int r = 0; r < rows; ++r) {
-                    ImPlotPoint p;
-                    p.x = bounds_min.x + 0.5*w + c*w;
-                    p.y = yref + ydir * (0.5*h + r*h);
-                    ImVec2 px = transformer(p);
-                    char buff[32];
-                    ImFormatString(buff, 32, fmt, values[i]);
-                    ImVec2 size = ImGui::CalcTextSize(buff);
-                    double t = ImClamp(ImRemap01((double)values[i], scale_min, scale_max),0.0,1.0);
-                    ImVec4 color = SampleColormap((float)t);
-                    ImU32 col = CalcTextColor(color);
-                    draw_list.AddText(px - size * 0.5f, col, buff);
-                    i++;
-                }
+            GetterHeatmapColMaj<T> getter(values, rows, cols, scale_min, scale_max,
+                                          (bounds_max.x - bounds_min.x) / cols,
+                                          (bounds_max.y - bounds_min.y) / rows,
+                                          bounds_min.x, yref, ydir);
+            RenderPrimitives1<RendererRectC>(getter);
+        } else {
+            if (std::is_same_v<T, float> && gp.Style.UseGpuAcceleration) {
+                ImVec2 coords_min = transformer(bounds_min);
+                ImVec2 coords_max = transformer(bounds_max);
+
+                constexpr std::array scales{0, 0, 1, 1, 2, 3, 4};
+
+                ImPlotPlot &plot = *gp.CurrentPlot;
+                int scale_x = scales[plot.Axes[plot.CurrentX].Scale];
+                int scale_y = scales[plot.Axes[plot.CurrentY].Scale];
+
+                Backend::RenderHeatmap(gp.CurrentItem->ID, values, ImGuiDataType_Float, rows, cols, scale_min,
+                                       scale_max, scale_x, scale_y, coords_min, coords_max, bounds_min, bounds_max,
+                                       reverse_y, gp.Style.Colormap, draw_list);
+            } else {
+                GetterHeatmapRowMaj<T> getter(values, rows, cols, scale_min, scale_max,
+                                              (bounds_max.x - bounds_min.x) / cols,
+                                              (bounds_max.y - bounds_min.y) / rows,
+                                              bounds_min.x, yref, ydir);
+                RenderPrimitives1<RendererRectC>(getter);
             }
         }
-        else {
-            for (int r = 0; r < rows; ++r) {
+
+        // labels
+        if (fmt != nullptr) {
+            const double w = (bounds_max.x - bounds_min.x) / cols;
+            const double h = (bounds_max.y - bounds_min.y) / rows;
+            const ImPlotPoint half_size(w * 0.5, h * 0.5);
+            int i = 0;
+            if (col_maj) {
                 for (int c = 0; c < cols; ++c) {
-                    ImPlotPoint p;
-                    p.x = bounds_min.x + 0.5*w + c*w;
-                    p.y = yref + ydir * (0.5*h + r*h);
-                    ImVec2 px = transformer(p);
-                    char buff[32];
-                    ImFormatString(buff, 32, fmt, values[i]);
-                    ImVec2 size = ImGui::CalcTextSize(buff);
-                    double t = ImClamp(ImRemap01((double)values[i], scale_min, scale_max),0.0,1.0);
-                    ImVec4 color = SampleColormap((float)t);
-                    ImU32 col = CalcTextColor(color);
-                    draw_list.AddText(px - size * 0.5f, col, buff);
-                    i++;
+                    for (int r = 0; r < rows; ++r) {
+                        ImPlotPoint p;
+                        p.x = bounds_min.x + 0.5 * w + c * w;
+                        p.y = yref + ydir * (0.5 * h + r * h);
+                        ImVec2 px = transformer(p);
+                        char buff[32];
+                        ImFormatString(buff, 32, fmt, values[i]);
+                        ImVec2 size = ImGui::CalcTextSize(buff);
+                        double t = ImClamp(ImRemap01((double) values[i], scale_min, scale_max), 0.0, 1.0);
+                        ImVec4 color = SampleColormap((float) t);
+                        ImU32 col = CalcTextColor(color);
+                        draw_list.AddText(px - size * 0.5f, col, buff);
+                        i++;
+                    }
+                }
+            } else {
+                for (int r = 0; r < rows; ++r) {
+                    for (int c = 0; c < cols; ++c) {
+                        ImPlotPoint p;
+                        p.x = bounds_min.x + 0.5 * w + c * w;
+                        p.y = yref + ydir * (0.5 * h + r * h);
+                        ImVec2 px = transformer(p);
+                        char buff[32];
+                        ImFormatString(buff, 32, fmt, values[i]);
+                        ImVec2 size = ImGui::CalcTextSize(buff);
+                        double t = ImClamp(ImRemap01((double) values[i], scale_min, scale_max), 0.0, 1.0);
+                        ImVec4 color = SampleColormap((float) t);
+                        ImU32 col = CalcTextColor(color);
+                        draw_list.AddText(px - size * 0.5f, col, buff);
+                        i++;
+                    }
                 }
             }
         }
     }
-}
 
 template <typename T>
 void PlotHeatmap(const char* label_id, const T* values, int rows, int cols, double scale_min, double scale_max, const char* fmt, const ImPlotPoint& bounds_min, const ImPlotPoint& bounds_max, ImPlotHeatmapFlags flags) {
