@@ -435,9 +435,9 @@ void SetImGuiContext(ImGuiContext* ctx) {
 ImPlotContext* CreateContext() {
     ImPlotContext* ctx = IM_NEW(ImPlotContext)();
     ctx->backendCtx = Backend::CreateContext();
-    Initialize(ctx);
     if (GImPlot == nullptr)
         SetCurrentContext(ctx);
+    Initialize(ctx);
     return ctx;
 }
 
