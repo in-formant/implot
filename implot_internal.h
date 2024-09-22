@@ -1668,6 +1668,30 @@ static inline double TransformInverse_Logit(double v, void*) {
     return 1.0 / (1.0 + ImPow(10,-v));
 }
 
+static inline double TransformForward_Mel(double v, void*) {
+    return ImMel(v);
+}
+
+static inline double TransformInverse_Mel(double v, void*) {
+    return ImMelInverse(v);
+}
+
+static inline double TransformForward_Bark(double v, void*) {
+    return ImBark(v);
+}
+
+static inline double TransformInverse_Bark(double v, void*) {
+    return ImBarkInverse(v);
+}
+
+static inline double TransformForward_Erb(double v, void*) {
+    return ImErb(v);
+}
+
+static inline double TransformInverse_Erb(double v, void*) {
+    return ImErbInverse(v);
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] Formatters
 //-----------------------------------------------------------------------------
@@ -1706,5 +1730,9 @@ void Locator_Default(ImPlotTicker& ticker, const ImPlotRange& range, float pixel
 void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
 void Locator_Log10(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
 void Locator_SymLog(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
+
+void Locator_Mel(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
+void Locator_Bark(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
+void Locator_Erb(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data);
 
 } // namespace ImPlot

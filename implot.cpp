@@ -850,15 +850,50 @@ void AddTicksCustom(const double* values, const char* const labels[], int n, ImP
     }
 }
 
-//// FIXME TODO FIX THISSSSS
-void AddTicksPseudolog(const ImPlotRange& range, float pix, bool vertical, ImPlotTickCollection& ticks, ImPlotFormatter formatter, void* data) {
-    static constexpr double cutoff = 4000;
-    if (range.Min < cutoff && range.Max > cutoff) {
-        AddTicksDefault(ImPlotRange{range.Min, cutoff}, pix, vertical, ticks, formatter, data);
+bool CalcLog2Exponents(const ImPlotRange& range, float pix, bool vertical, int& exp_min, int& exp_max, int& exp_step) {
+    if (range.Min * range.Max > 0) {
+        const int nMajor = vertical ? ImMax(2, (int)IM_ROUND(pix * 0.02f)) : ImMax(2, (int)IM_ROUND(pix * 0.01f)); // TODO: magic numbers
+        double log_min = ImLog2(ImAbs(range.Min));
+        double log_max = ImLog2(ImAbs(range.Max));
+        double log_a = ImMin(log_min,log_max);
+        double log_b = ImMax(log_min,log_max);
+        exp_step  = ImMax(1,(int)(log_b - log_a) / nMajor);
+        exp_min   = (int)log_a;
+        exp_max   = (int)log_b;
+        if (exp_step != 1) {
+            while(exp_step % 3 != 0)       exp_step++; // make step size multiple of three
+            while(exp_min % exp_step != 0) exp_min--;  // decrease exp_min until exp_min + N * exp_step will be 0
+        }
+        return true;
     }
-    if (range.Max > cutoff) {
-        AddTicksDefault(ImPlotRange{cutoff, range.Max}, pix, vertical, ticks, formatter, data);
+    return false;
+}
+
+void AddTicksLog2(const ImPlotRange& range, int exp_min, int exp_max, int exp_step, ImPlotTicker& ticker, ImPlotFormatter formatter, void* data) {
+    const double sign = ImSign(range.Max);
+    for (int e = exp_min - exp_step; e < (exp_max + exp_step); e += exp_step) {
+        double major1 = sign*ImPow(2, (double)(e));
+        double major2 = sign*ImPow(2, (double)(e + 1));
+        double interval = (major2 - major1) / 9;
+        if (major1 >= (range.Min - DBL_EPSILON) && major1 <= (range.Max + DBL_EPSILON))
+            ticker.AddTick(major1, true, 0, true, formatter, data);
+        for (int j = 0; j < exp_step; ++j) {
+            major1 = sign*ImPow(2, (double)(e+j));
+            major2 = sign*ImPow(2, (double)(e+j+1));
+            interval = (major2 - major1) / 9;
+            for (int i = 1; i < (9 + (int)(j < (exp_step - 1))); ++i) {
+                double minor = major1 + i * interval;
+                if (minor >= (range.Min - DBL_EPSILON) && minor <= (range.Max + DBL_EPSILON))
+                    ticker.AddTick(minor, false, 0, false, formatter, data);
+            }
+        }
     }
+}
+
+void Locator_Log2(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data) {
+    int exp_min, exp_max, exp_step;
+    if (CalcLog2Exponents(range, pixels, vertical, exp_min, exp_max, exp_step))
+        AddTicksLog2(range, exp_min, exp_max, exp_step, ticker, formatter, formatter_data);
 }
 
 //-----------------------------------------------------------------------------
@@ -2274,6 +2309,27 @@ void SetupAxisScale(ImAxis idx, ImPlotScale scale) {
         axis.TransformData    = nullptr;
         axis.Locator          = Locator_SymLog;
         axis.ConstraintRange  = ImPlotRange(-INFINITY, INFINITY);
+        break;
+    case ImPlotScale_Mel:
+        axis.TransformForward = TransformForward_Mel;
+        axis.TransformInverse = TransformInverse_Mel;
+        axis.TransformData    = nullptr;
+        axis.Locator          = Locator_Log2;
+        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
+        break;
+    case ImPlotScale_Bark:
+        axis.TransformForward = TransformForward_Bark;
+        axis.TransformInverse = TransformInverse_Bark;
+        axis.TransformData    = nullptr;
+        axis.Locator          = Locator_Log2;
+        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
+        break;
+    case ImPlotScale_Erb:
+        axis.TransformForward = TransformForward_Erb;
+        axis.TransformInverse = TransformInverse_Erb;
+        axis.TransformData    = nullptr;
+        axis.Locator          = Locator_Log2;
+        axis.ConstraintRange  = ImPlotRange(0, INFINITY);
         break;
     default:
         axis.TransformForward = nullptr;
