@@ -1499,11 +1499,6 @@ void ShowAxisContextMenu(ImPlotAxis& axis, ImPlotAxis* equal_axis, bool /*time_a
     //     EndDisabledControls(axis.IsLog() || axis.IsSymLog());
     // }
 
-    int scale = axis.Scale;
-    if (ImGui::Combo("Scale", &scale, "Linear\0Logarithmic\0Mel\0ERB\0Bark\0")) {
-        axis.SetScale(scale);
-    }
-
     ImGui::Separator();
     ImGui::CheckboxFlags("Invert",(unsigned int*)&axis.Flags, ImPlotAxisFlags_Invert);
     ImGui::CheckboxFlags("Opposite",(unsigned int*)&axis.Flags, ImPlotAxisFlags_Opposite);

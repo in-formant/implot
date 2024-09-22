@@ -102,6 +102,8 @@ extern IMPLOT_API ImPlotContext* GImPlot; // Current implicit context pointer
 // Computes the common (base-10) logarithm
 static inline float  ImLog10(float x)  { return log10f(x); }
 static inline double ImLog10(double x) { return log10(x);  }
+static inline float  ImLog2(float x)  { return log2f(x); }
+static inline double ImLog2(double x) { return log2(x);  }
 static inline float  ImSinh(float x)   { return sinhf(x);  }
 static inline double ImSinh(double x)  { return sinh(x);   }
 static inline float  ImAsinh(float x)  { return asinhf(x); }
